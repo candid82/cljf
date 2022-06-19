@@ -8,7 +8,7 @@ typedef struct {
     char *sp;
 } context;
 
-typedef enum { V_STRING, V_UKNOWN } value_type;
+typedef enum { V_STRING, V_NUMBER, V_UKNOWN } value_type;
 
 typedef struct {
     value_type type;
@@ -16,7 +16,7 @@ typedef struct {
     char *end;
 } value;
 
-char *value_type_names[V_UKNOWN] = {"string"};
+char *value_type_names[V_UKNOWN] = {"string", "number"};
 context *ctx;
 
 value *make_value(value_type type, char *start, char *end) {
@@ -58,24 +58,53 @@ value *read_string(void) {
     return make_value(V_STRING, start, ctx->sp);
 }
 
-void skip_whitespace(void) {
+bool is_whitespace(char c) {
     // Note: doesn't handle unicode whitespaces (yet?).
-    while (1) {
-        switch (*ctx->sp) {
-        case ' ':
-        case '\t':
-        case '\n':
-        case '\f':
-        case '\r':
-        case '\v':
-        case '\x1C':
-        case '\x1D':
-        case '\x1E':
-        case '\x1F':
-            ctx->sp++;
-        default:
-            return;
-        }
+    switch (c) {
+    case ' ':
+    case '\t':
+    case '\n':
+    case '\f':
+    case '\r':
+    case '\v':
+    case '\x1C':
+    case '\x1D':
+    case '\x1E':
+    case '\x1F':
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool is_separator(char c) {
+    if (is_whitespace(c))
+        return true;
+    switch (c) {
+    case '\0':
+    case '(':
+    case ')':
+    case '[':
+    case ']':
+    case '{':
+    case '}':
+    case ',':
+        return true;
+    default:
+        return false;
+    }
+}
+
+value *read_number(void) {
+    char *start = ctx->sp;
+    for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++)
+        ;
+    return make_value(V_NUMBER, start, ctx->sp);
+}
+
+void skip_whitespace(void) {
+    while (is_whitespace(*ctx->sp)) {
+        ctx->sp++;
     }
 }
 
@@ -86,6 +115,18 @@ value *read_value(void) {
     switch (*ctx->sp) {
     case '"':
         return read_string();
+        break;
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+        return read_number();
         break;
     default:
         fprintf(stderr, "Unexpected character: %c\n", *ctx->sp);
