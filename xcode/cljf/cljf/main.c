@@ -48,7 +48,7 @@ typedef struct {
     char *start;
     char *end;
     char *prefix;
-    unsigned char new_lines;
+    int new_lines;
 } value;
 
 typedef struct {
@@ -317,18 +317,57 @@ value *read_value(void) {
     }
 }
 
+// void format_list(collection *coll, int indent, FILE *f) {
+//     int new_indent = indent + 1;
+//     if (coll->val.prefix) {
+//         fputs(coll->val.prefix, f);
+//         new_indent += strlen(coll->val.prefix);
+//     }
+//     fputc('(', f);
+//     if (coll->count && coll->vals[0]->type == V_SYMBOL) {
+//         new_indent++;
+//     }
+//     for (int i = 0; i < coll->count - 1; i++) {
+//         format_value(coll->vals[i], new_indent, f);
+//         fputc(' ', f);
+//     }
+//     if (coll->count) {
+//         format_value(coll->vals[coll->count - 1], new_indent, f);
+//     }
+//     fputc(')', f);
+// }
+
 void format_collection(collection *coll, char start, char end, int indent,
                        FILE *f) {
+    int new_indent = indent + 1;
     if (coll->val.prefix) {
         fputs(coll->val.prefix, f);
+        new_indent += strlen(coll->val.prefix);
     }
     fputc(start, f);
+
+    if (start == '(' && coll->count && coll->vals[0]->type == V_SYMBOL) {
+        new_indent++;
+    }
+
     for (int i = 0; i < coll->count - 1; i++) {
-        format_value(coll->vals[i], indent, f);
-        fputc(' ', f);
+        value *val = coll->vals[i];
+
+        format_value(val, new_indent, f);
+
+        for (int j = 0; j < val->new_lines; j++) {
+            fputc('\n', f);
+        }
+        if (val->new_lines) {
+            for (int k = 0; k < new_indent; k++) {
+                fputc(' ', f);
+            }
+        } else {
+            fputc(' ', f);
+        }
     }
     if (coll->count) {
-        format_value(coll->vals[coll->count - 1], indent, f);
+        format_value(coll->vals[coll->count - 1], new_indent, f);
     }
     fputc(end, f);
 }
@@ -357,9 +396,6 @@ void format_value(value *val, int indent, FILE *f) {
             fwrite(val->start, 1, (val->end - val->start), f);
             break;
         }
-    }
-    for (unsigned char i = 0; i < val->new_lines; i++) {
-        fputc('\n', f);
     }
 }
 
@@ -424,8 +460,11 @@ int main(int argc, char **argv) {
     }
 
     while ((ctx->last_read_val = read_value())) {
+        skip_whitespace();
         format_value(ctx->last_read_val, 0, out);
-        fputc('\n', out);
-        fputc('\n', out);
+        for (int j = 0; j < ctx->last_read_val->new_lines; j++) {
+            fputc('\n', out);
+        }
     }
+    fclose(out);
 }

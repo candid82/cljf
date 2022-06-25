@@ -1,3 +1,3 @@
 #!/bin/bash
 
-gcc main.c -o cljf && ./cljf input.clj
+gcc xcode/cljf/cljf/main.c -o cljf
