@@ -17,10 +17,9 @@
 */
 
 typedef struct {
-    char *bytes;
-    size_t size;
-    char *sp;
-} context;
+    char *input;
+    char *output;
+} options;
 
 typedef enum {
     V_CHAR,
@@ -48,6 +47,8 @@ typedef struct {
     value_type type;
     char *start;
     char *end;
+    char *prefix;
+    unsigned char new_lines;
 } value;
 
 typedef struct {
@@ -57,24 +58,41 @@ typedef struct {
     int capacity;
 } collection;
 
+typedef struct {
+    value *last_read_val;
+    size_t size;
+    char *bytes;
+    char *sp;
+} context;
+
 value *read_value(void);
 bool is_separator(char c);
+void format_value(value *val, int indent, FILE *f);
 
 context *ctx;
+
+context *make_context(void) {
+    context *ctx = malloc(sizeof(context));
+    memset(ctx, 0, sizeof(context));
+    return ctx;
+}
 
 value *make_value(value_type type, char *start, char *end) {
     value *res = malloc(sizeof(value));
     res->type = type;
     res->start = start;
     res->end = end;
+    res->prefix = NULL;
+    res->new_lines = 0;
     return res;
 }
 
-collection *make_collection(value_type type, char *start) {
+collection *make_collection(value_type type, char *start, char *prefix) {
     collection *res = malloc(sizeof(collection));
     memset(res, 0, (sizeof(collection)));
     res->val.type = type;
     res->val.start = start;
+    res->val.prefix = prefix;
     return res;
 }
 
@@ -89,7 +107,7 @@ void add_to_coll(collection *coll, value *v) {
 }
 
 void print_usage(void) {
-    fprintf(stderr, "Usage: cljf <filename>\n");
+    fprintf(stderr, "Usage: cljf <filename> [-o <filename>]\n");
     exit(1);
 }
 
@@ -219,25 +237,27 @@ value *read_keyword(void) {
 
 void skip_whitespace(void) {
     while (is_whitespace(*ctx->sp)) {
+        if (ctx->last_read_val && *ctx->sp == '\n') {
+            ctx->last_read_val->new_lines++;
+        }
         ctx->sp++;
     }
 }
 
 bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
-value *read_collection(value_type type, char *start, char end) {
-    value *v;
+value *read_collection(value_type type, char *start, char end, char *prefix) {
     ctx->sp++;
-    collection *coll = make_collection(type, start);
+    collection *coll = make_collection(type, start, prefix);
     skip_whitespace();
     while (*ctx->sp != end) {
-        v = read_value();
-        if (!v) {
+        ctx->last_read_val = read_value();
+        if (!ctx->last_read_val) {
             fprintf(stderr,
                     "Unexpected end of file while reading a collection\n");
             exit(4);
         }
-        add_to_coll(coll, v);
+        add_to_coll(coll, ctx->last_read_val);
         skip_whitespace();
     }
     ctx->sp++;
@@ -251,11 +271,11 @@ value *read_value(void) {
         return NULL;
     switch (*ctx->sp) {
     case '(':
-        return read_collection(V_LIST, ctx->sp, ')');
+        return read_collection(V_LIST, ctx->sp, ')', NULL);
     case '[':
-        return read_collection(V_VECTOR, ctx->sp, ']');
+        return read_collection(V_VECTOR, ctx->sp, ']', NULL);
     case '{':
-        return read_collection(V_MAP, ctx->sp, '}');
+        return read_collection(V_MAP, ctx->sp, '}', NULL);
     case '"':
         return read_string(V_STRING, ctx->sp);
     case '0':
@@ -283,10 +303,10 @@ value *read_value(void) {
         switch (ctx->sp[1]) {
         case '{':
             ctx->sp++;
-            return read_collection(V_SET, ctx->sp - 1, '}');
+            return read_collection(V_SET, ctx->sp - 1, '}', "#");
         case '(':
             ctx->sp++;
-            return read_collection(V_FN, ctx->sp - 1, ')');
+            return read_collection(V_FN, ctx->sp - 1, ')', "#");
         case '"':
             ctx->sp++;
             return read_string(V_REGEX, ctx->sp - 1);
@@ -294,6 +314,52 @@ value *read_value(void) {
         // fallthrough
     default:
         return read_symbol();
+    }
+}
+
+void format_collection(collection *coll, char start, char end, int indent,
+                       FILE *f) {
+    if (coll->val.prefix) {
+        fputs(coll->val.prefix, f);
+    }
+    fputc(start, f);
+    for (int i = 0; i < coll->count - 1; i++) {
+        format_value(coll->vals[i], indent, f);
+        fputc(' ', f);
+    }
+    if (coll->count) {
+        format_value(coll->vals[coll->count - 1], indent, f);
+    }
+    fputc(end, f);
+}
+
+void format_value(value *val, int indent, FILE *f) {
+    if (val->type < V_LIST) {
+        fwrite(val->start, 1, (val->end - val->start), f);
+    } else {
+        switch (val->type) {
+        case V_LIST:
+            format_collection((collection *)val, '(', ')', indent, f);
+            break;
+        case V_VECTOR:
+            format_collection((collection *)val, '[', ']', indent, f);
+            break;
+        case V_MAP:
+            format_collection((collection *)val, '{', '}', indent, f);
+            break;
+        case V_SET:
+            format_collection((collection *)val, '{', '}', indent, f);
+            break;
+        case V_FN:
+            format_collection((collection *)val, '(', ')', indent, f);
+            break;
+        default:
+            fwrite(val->start, 1, (val->end - val->start), f);
+            break;
+        }
+    }
+    for (unsigned char i = 0; i < val->new_lines; i++) {
+        fputc('\n', f);
     }
 }
 
@@ -317,16 +383,49 @@ void read_file(const char *filename, context *ctx) {
     ctx->bytes[size] = '\0';
 }
 
-int main(int argc, char **argv) {
-    if (argc != 2) {
-        print_usage();
+void parse_args(int argc, char **argv, options *opts) {
+    if (argc == 2) {
+        opts->input = argv[1];
+        opts->output = NULL;
+        return;
     }
 
-    ctx = malloc(sizeof(context));
-    read_file(argv[1], ctx);
+    if (argc == 4) {
+        if (!strcmp(argv[1], "-o")) {
+            opts->input = argv[3];
+            opts->output = argv[2];
+            return;
+        }
+        if (!strcmp(argv[2], "-o")) {
+            opts->input = argv[1];
+            opts->output = argv[3];
+            return;
+        }
+    }
 
-    value *val = NULL;
-    while ((val = read_value())) {
-        print_value(val);
+    print_usage();
+}
+
+int main(int argc, char **argv) {
+    options opts;
+    parse_args(argc, argv, &opts);
+
+    ctx = make_context();
+    read_file(opts.input, ctx);
+
+    FILE *out = stdout;
+
+    if (opts.output) {
+        out = fopen(opts.output, "wb");
+        if (!out) {
+            fprintf(stderr, "Cannot open file for writing: %s\n", opts.output);
+            exit(2);
+        }
+    }
+
+    while ((ctx->last_read_val = read_value())) {
+        format_value(ctx->last_read_val, 0, out);
+        fputc('\n', out);
+        fputc('\n', out);
     }
 }
