@@ -63,11 +63,13 @@ typedef struct {
     size_t size;
     char *bytes;
     char *sp;
+    int indent;
+    int offset;
 } context;
 
 value *read_value(void);
 bool is_separator(char c);
-void format_value(value *val, int indent, FILE *f);
+void format_value(value *val, FILE *f);
 
 context *ctx;
 
@@ -317,85 +319,70 @@ value *read_value(void) {
     }
 }
 
-// void format_list(collection *coll, int indent, FILE *f) {
-//     int new_indent = indent + 1;
-//     if (coll->val.prefix) {
-//         fputs(coll->val.prefix, f);
-//         new_indent += strlen(coll->val.prefix);
-//     }
-//     fputc('(', f);
-//     if (coll->count && coll->vals[0]->type == V_SYMBOL) {
-//         new_indent++;
-//     }
-//     for (int i = 0; i < coll->count - 1; i++) {
-//         format_value(coll->vals[i], new_indent, f);
-//         fputc(' ', f);
-//     }
-//     if (coll->count) {
-//         format_value(coll->vals[coll->count - 1], new_indent, f);
-//     }
-//     fputc(')', f);
-// }
-
-void format_collection(collection *coll, char start, char end, int indent,
-                       FILE *f) {
-    int new_indent = indent + 1;
+void format_collection(collection *coll, char start, char end, FILE *f) {
+    int old_indent = ctx->indent;
     if (coll->val.prefix) {
         fputs(coll->val.prefix, f);
-        new_indent += strlen(coll->val.prefix);
+        ctx->offset += strlen(coll->val.prefix);
     }
     fputc(start, f);
+    ctx->offset++;
+    ctx->indent = ctx->offset;
 
     if (start == '(' && coll->count && coll->vals[0]->type == V_SYMBOL) {
-        new_indent++;
+        ctx->indent++;
     }
 
     for (int i = 0; i < coll->count - 1; i++) {
         value *val = coll->vals[i];
 
-        format_value(val, new_indent, f);
+        format_value(val, f);
 
         for (int j = 0; j < val->new_lines; j++) {
             fputc('\n', f);
         }
         if (val->new_lines) {
-            for (int k = 0; k < new_indent; k++) {
+            for (int k = 0; k < ctx->indent; k++) {
                 fputc(' ', f);
             }
+            ctx->offset = ctx->indent;
         } else {
             fputc(' ', f);
+            ctx->offset++;
         }
     }
     if (coll->count) {
-        format_value(coll->vals[coll->count - 1], new_indent, f);
+        format_value(coll->vals[coll->count - 1], f);
     }
     fputc(end, f);
+    ctx->offset++;
+
+    ctx->indent = old_indent;
 }
 
-void format_value(value *val, int indent, FILE *f) {
-    if (val->type < V_LIST) {
-        fwrite(val->start, 1, (val->end - val->start), f);
-    } else {
-        switch (val->type) {
-        case V_LIST:
-            format_collection((collection *)val, '(', ')', indent, f);
-            break;
-        case V_VECTOR:
-            format_collection((collection *)val, '[', ']', indent, f);
-            break;
-        case V_MAP:
-            format_collection((collection *)val, '{', '}', indent, f);
-            break;
-        case V_SET:
-            format_collection((collection *)val, '{', '}', indent, f);
-            break;
-        case V_FN:
-            format_collection((collection *)val, '(', ')', indent, f);
-            break;
-        default:
-            fwrite(val->start, 1, (val->end - val->start), f);
-            break;
-        }
+void format_value(value *val, FILE *f) {
+    switch (val->type) {
+    case V_LIST:
+        format_collection((collection *)val, '(', ')', f);
+        break;
+    case V_VECTOR:
+        format_collection((collection *)val, '[', ']', f);
+        break;
+    case V_MAP:
+        format_collection((collection *)val, '{', '}', f);
+        break;
+    case V_SET:
+        format_collection((collection *)val, '{', '}', f);
+        break;
+    case V_FN:
+        format_collection((collection *)val, '(', ')', f);
+        break;
+    default: {
+        int len = val->end - val->start;
+        fwrite(val->start, 1, len, f);
+        ctx->offset += len;
+        break;
+    }
     }
 }
 
@@ -461,7 +448,9 @@ int main(int argc, char **argv) {
 
     while ((ctx->last_read_val = read_value())) {
         skip_whitespace();
-        format_value(ctx->last_read_val, 0, out);
+        ctx->offset = 0;
+        ctx->indent = 0;
+        format_value(ctx->last_read_val, out);
         for (int j = 0; j < ctx->last_read_val->new_lines; j++) {
             fputc('\n', out);
         }
