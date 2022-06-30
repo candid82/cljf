@@ -73,6 +73,8 @@ void format_value(value *val, FILE *f);
 
 context *ctx;
 
+static inline int length(value *val) { return val->end - val->start; }
+
 context *make_context(void) {
     context *ctx = malloc(sizeof(context));
     memset(ctx, 0, sizeof(context));
@@ -114,8 +116,8 @@ void print_usage(void) {
 }
 
 void print_value(value *val) {
-    printf("%s[%ld]: %.*s\n", value_type_names[val->type],
-           (val->end - val->start), (int)(val->end - val->start), val->start);
+    printf("%s[%ld]: %.*s\n", value_type_names[val->type], length(val),
+           (int)(length(val)), val->start);
     if (is_collection(val)) {
         collection *coll = (collection *)val;
         for (int i = 0; i < coll->count; i++) {
@@ -319,6 +321,49 @@ value *read_value(void) {
     }
 }
 
+bool check_rest(int start, int len, value *val, const char *rest) {
+    return val->end - (val->start + start) == len &&
+           memcmp(val->start + start, rest, len) == 0;
+}
+
+bool is_indent_one(value *val) {
+    switch (val->start[0]) {
+    case 'i':
+        return check_rest(1, 1, val, "f");
+    case 'f':
+        switch (val->start[1]) {
+        case 'n':
+            return length(val) == 2;
+        case 'i':
+            return check_rest(2, 5, val, "nally");
+        }
+    case 'l':
+        switch (val->start[1]) {
+        case 'e':
+            switch (val->start[2]) {
+            case 't':
+                return length(val) == 3 || check_rest(3, 2, val, "fn");
+            }
+        case 'o':
+            return check_rest(2, 2, val, "op");
+        }
+    case 'd':
+        switch (val->start[1]) {
+        case 'o':
+            return length(val) == 2;
+        case 'e':
+            return val->start[2] == 'f';
+        }
+    case 't':
+        return check_rest(1, 2, val, "ry");
+    case 'c':
+        return check_rest(1, 4, val, "atch");
+    case 'n':
+        return check_rest(1, 1, val, "s");
+    }
+    return false;
+}
+
 void format_collection(collection *coll, char start, char end, FILE *f) {
     int old_indent = ctx->indent;
     if (coll->val.prefix) {
@@ -329,8 +374,12 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
     ctx->offset++;
     ctx->indent = ctx->offset;
 
-    if (start == '(' && coll->count && coll->vals[0]->type == V_SYMBOL) {
-        ctx->indent++;
+    if (start == '(' && coll->count > 1 && coll->vals[0]->type == V_SYMBOL) {
+        if (is_indent_one(coll->vals[0])) {
+            ctx->indent++;
+        } else {
+            ctx->indent += (coll->vals[0]->end - coll->vals[0]->start + 1);
+        }
     }
 
     for (int i = 0; i < coll->count - 1; i++) {
@@ -378,7 +427,7 @@ void format_value(value *val, FILE *f) {
         format_collection((collection *)val, '(', ')', f);
         break;
     default: {
-        int len = val->end - val->start;
+        int len = length(val);
         fwrite(val->start, 1, len, f);
         ctx->offset += len;
         break;
