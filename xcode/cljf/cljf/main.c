@@ -16,6 +16,78 @@
 - #?, #?@
 */
 
+#define ASIZE(a) (sizeof(a) / sizeof(a[0]))
+
+const int TRIE_CHILDREN_NUM = '~' - '!' + 1;
+
+typedef struct trie_node {
+    struct trie_node *children[TRIE_CHILDREN_NUM];
+    const char *rest;
+    bool is_terminal;
+} trie_node;
+
+trie_node *make_trie_node(void) {
+    trie_node *res = malloc(sizeof(trie_node));
+    memset(res, 0, sizeof(trie_node));
+    return res;
+}
+
+bool is_in_trie(trie_node *root, const char *start, const char *end) {
+    trie_node *node = root;
+    for (const char *p = start; p != end; p++) {
+        int index = p[0] - '!';
+        if (node->rest && !strcmp(node->rest, p))
+            return true;
+        if (!node->children[index])
+            return false;
+        node = node->children[index];
+    }
+    return node->is_terminal || (node->rest && !node->rest[0]);
+}
+
+void add_to_trie(trie_node *node, const char *data) {
+    int index = data[0] - '!';
+    if (!node->children[index]) {
+        node->children[index] = make_trie_node();
+        node->children[index]->rest = data + 1;
+        const char *rest = node->rest;
+        if (rest) {
+            node->rest = NULL;
+            if (!rest[0]) {
+                node->is_terminal = true;
+            } else {
+                add_to_trie(node, rest);
+            }
+        }
+        return;
+    }
+    if (!data[1]) {
+        node->children[index]->is_terminal = true;
+    } else {
+        add_to_trie(node->children[index], data + 1);
+    }
+}
+
+void print_trie(trie_node *node, int indent) {
+    for (int k = 0; k < indent; k++) {
+        putchar(' ');
+    }
+    if (node->rest) {
+        printf("%d: %s\n", node->is_terminal, node->rest);
+    } else {
+        printf("%d\n", node->is_terminal);
+        for (int i = 0; i < TRIE_CHILDREN_NUM; i++) {
+            if (node->children[i]) {
+                for (int k = 0; k < indent; k++) {
+                    putchar(' ');
+                }
+                printf("%c: ", i + '!');
+                print_trie(node->children[i], indent + 3);
+            }
+        }
+    }
+}
+
 typedef struct {
     char *input;
     char *output;
@@ -72,8 +144,36 @@ bool is_separator(char c);
 void format_value(value *val, FILE *f);
 
 context *ctx;
+const char *indent_one[] = {"bound-fn",     "if",           "if-not",
+                            "case",         "cond",         "cond->",
+                            "cond->>",      "as->",         "condp",
+                            "when",         "while",        "when-not",
+                            "when-first",   "do",           "future",
+                            "thread", // with-
+                            "comment",      "doto",         "locking",
+                            "proxy",        "reify",        "fdef",
+                            "defprotocol",  "extend",       "extend-protocol",
+                            "extend-type",  "catch",        "let",
+                            "letfn",        "binding",      "loop",
+                            "for",          "go-loop",      "doseq",
+                            "dotimes",      "when-let",     "if-let",
+                            "defstruct",    "struct-map",   "defmethod",
+                            "testing",      "are",          "deftest",
+                            "context",      "use-fixtures", "POST",
+                            "GET",          "PUT",          "DELETE",
+                            "handler-case", "handle",       "dotrace",
+                            "deftrace",     "match"};
 
-static inline int length(value *val) { return val->end - val->start; }
+trie_node *indent_one_trie;
+
+static inline size_t length(value *val) { return val->end - val->start; }
+
+void pump_tries(void) {
+    indent_one_trie = make_trie_node();
+    for (int i = 0; i < ASIZE(indent_one); i++) {
+        add_to_trie(indent_one_trie, indent_one[i]);
+    }
+}
 
 context *make_context(void) {
     context *ctx = malloc(sizeof(context));
@@ -209,7 +309,7 @@ value *read_symbol(void) {
     for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++)
         ;
     value_type t = V_SYMBOL;
-    int len = ctx->sp - start;
+    size_t len = ctx->sp - start;
     if (len == 3 && start[0] == 'n' && start[1] == 'i' && start[2] == 'l') {
         t = V_NIL;
     } else if (len == 4 && start[0] == 't' && start[1] == 'r' &&
@@ -327,41 +427,7 @@ bool check_rest(int start, int len, value *val, const char *rest) {
 }
 
 bool is_indent_one(value *val) {
-    switch (val->start[0]) {
-    case 'i':
-        return check_rest(1, 1, val, "f");
-    case 'f':
-        switch (val->start[1]) {
-        case 'n':
-            return length(val) == 2;
-        case 'i':
-            return check_rest(2, 5, val, "nally");
-        }
-    case 'l':
-        switch (val->start[1]) {
-        case 'e':
-            switch (val->start[2]) {
-            case 't':
-                return length(val) == 3 || check_rest(3, 2, val, "fn");
-            }
-        case 'o':
-            return check_rest(2, 2, val, "op");
-        }
-    case 'd':
-        switch (val->start[1]) {
-        case 'o':
-            return length(val) == 2;
-        case 'e':
-            return val->start[2] == 'f';
-        }
-    case 't':
-        return check_rest(1, 2, val, "ry");
-    case 'c':
-        return check_rest(1, 4, val, "atch");
-    case 'n':
-        return check_rest(1, 1, val, "s");
-    }
-    return false;
+    return is_in_trie(indent_one_trie, val->start, val->end);
 }
 
 void format_collection(collection *coll, char start, char end, FILE *f) {
@@ -427,7 +493,7 @@ void format_value(value *val, FILE *f) {
         format_collection((collection *)val, '(', ')', f);
         break;
     default: {
-        int len = length(val);
+        size_t len = length(val);
         fwrite(val->start, 1, len, f);
         ctx->offset += len;
         break;
@@ -481,6 +547,8 @@ void parse_args(int argc, char **argv, options *opts) {
 int main(int argc, char **argv) {
     options opts;
     parse_args(argc, argv, &opts);
+
+    pump_tries();
 
     ctx = make_context();
     read_file(opts.input, ctx);
