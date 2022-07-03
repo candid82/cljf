@@ -18,25 +18,19 @@
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
-const char *body_indent[] = {"fn",           "bound-fn",     "if",
-                             "if-not",       "case",         "cond",
-                             "cond->",       "cond->>",      "as->",
-                             "condp",        "when",         "while",
-                             "when-not",     "when-first",   "future",
-                             "thread", // with-
-                             "comment",      "doto",         "locking",
-                             "proxy",        "reify",        "fdef",
-                             "defprotocol",  "extend",       "extend-protocol",
-                             "extend-type",  "catch",        "let",
-                             "letfn",        "binding",      "loop",
-                             "for",          "go-loop",      "doseq",
-                             "dotimes",      "when-let",     "if-let",
-                             "defstruct",    "struct-map",   "defmethod",
-                             "testing",      "are",          "deftest",
-                             "context",      "use-fixtures", "POST",
-                             "GET",          "PUT",          "DELETE",
-                             "handler-case", "handle",       "dotrace",
-                             "deftrace",     "match"};
+const char *body_indent[] = {
+    "fn",          "bound-fn", "case",         "cond",
+    "cond->",      "cond->>",  "as->",         "condp",
+    "while",       "future",
+    "thread", // with-
+    "comment",     "doto",     "locking",      "proxy",
+    "reify",       "fdef",     "extend",       "extend-protocol",
+    "extend-type", "catch",    "let",          "letfn",
+    "binding",     "loop",     "for",          "go-loop",
+    "doseq",       "dotimes",  "struct-map",   "testing",
+    "are",         "context",  "use-fixtures", "POST",
+    "GET",         "PUT",      "DELETE",       "handler-case",
+    "handle",      "dotrace",  "match"};
 
 const char *do_indent[] = {"do", "try", "finally", "go", "alt!", "alt!!"};
 
@@ -435,11 +429,21 @@ bool check_rest(int start, int len, value *val, const char *rest) {
 }
 
 static inline bool is_body_indent(value *val) {
-    return is_in_trie(body_indent_trie, val->start, val->end);
+    return is_in_trie(body_indent_trie, val->start, val->end) ||
+           (val->end - val->start > 5) && memcmp(val->start, "with-", 5);
 }
 
 static inline bool is_do_indent(value *val) {
     return is_in_trie(do_indent_trie, val->start, val->end);
+}
+
+static inline bool is_def_indent(value *val) {
+    size_t len = val->end - val->start;
+    return !memcmp(val->start, "def", 3) ||
+           (len == 2 && !memcmp(val->start, "if", 2)) ||
+           (len > 3 && !memcmp(val->start, "if-", 3)) ||
+           (len == 4 && !memcmp(val->start, "when", 4)) ||
+           (len > 5 && !memcmp(val->start, "when-", 5));
 }
 
 void format_collection(collection *coll, char start, char end, FILE *f) {
@@ -453,11 +457,14 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
     ctx->indent = ctx->offset;
 
     if (start == '(' && coll->count > 1 && coll->vals[0]->type == V_SYMBOL) {
-        if (is_body_indent(coll->vals[0]) ||
-            (is_do_indent(coll->vals[0]) && coll->vals[0]->new_lines)) {
+        value *v = coll->vals[0];
+        if (is_body_indent(v) || (is_do_indent(v) && v->new_lines)) {
             ctx->indent++;
-        } else {
-            ctx->indent += (coll->vals[0]->end - coll->vals[0]->start + 1);
+        } else if (is_def_indent(v)) {
+            ctx->indent++;
+            v->new_lines = 0;
+        } else if (!v->new_lines) {
+            ctx->indent += (v->end - v->start + 1);
         }
     }
 
