@@ -18,6 +18,29 @@
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
+const char *body_indent[] = {"fn",           "bound-fn",     "if",
+                             "if-not",       "case",         "cond",
+                             "cond->",       "cond->>",      "as->",
+                             "condp",        "when",         "while",
+                             "when-not",     "when-first",   "do",
+                             "future",
+                             "thread", // with-
+                             "comment",      "doto",         "locking",
+                             "proxy",        "reify",        "fdef",
+                             "defprotocol",  "extend",       "extend-protocol",
+                             "extend-type",  "catch",        "let",
+                             "letfn",        "binding",      "loop",
+                             "for",          "go-loop",      "doseq",
+                             "dotimes",      "when-let",     "if-let",
+                             "defstruct",    "struct-map",   "defmethod",
+                             "testing",      "are",          "deftest",
+                             "context",      "use-fixtures", "POST",
+                             "GET",          "PUT",          "DELETE",
+                             "handler-case", "handle",       "dotrace",
+                             "deftrace",     "match"};
+
+const char *do_indent[] = {"do", "try", "finally", "go", "alt!", "alt!!"};
+
 const int TRIE_CHILDREN_NUM = '~' - '!' + 1;
 
 typedef struct trie_node {
@@ -36,7 +59,7 @@ bool is_in_trie(trie_node *root, const char *start, const char *end) {
     trie_node *node = root;
     for (const char *p = start; p != end; p++) {
         int index = p[0] - '!';
-        if (node->rest && !strcmp(node->rest, p))
+        if (node->rest && !memcmp(node->rest, p, end - p))
             return true;
         if (!node->children[index])
             return false;
@@ -144,34 +167,20 @@ bool is_separator(char c);
 void format_value(value *val, FILE *f);
 
 context *ctx;
-const char *indent_one[] = {"bound-fn",     "if",           "if-not",
-                            "case",         "cond",         "cond->",
-                            "cond->>",      "as->",         "condp",
-                            "when",         "while",        "when-not",
-                            "when-first",   "do",           "future",
-                            "thread", // with-
-                            "comment",      "doto",         "locking",
-                            "proxy",        "reify",        "fdef",
-                            "defprotocol",  "extend",       "extend-protocol",
-                            "extend-type",  "catch",        "let",
-                            "letfn",        "binding",      "loop",
-                            "for",          "go-loop",      "doseq",
-                            "dotimes",      "when-let",     "if-let",
-                            "defstruct",    "struct-map",   "defmethod",
-                            "testing",      "are",          "deftest",
-                            "context",      "use-fixtures", "POST",
-                            "GET",          "PUT",          "DELETE",
-                            "handler-case", "handle",       "dotrace",
-                            "deftrace",     "match"};
 
-trie_node *indent_one_trie;
+trie_node *body_indent_trie;
+trie_node *do_indent_trie;
 
 static inline size_t length(value *val) { return val->end - val->start; }
 
 void pump_tries(void) {
-    indent_one_trie = make_trie_node();
-    for (int i = 0; i < ASIZE(indent_one); i++) {
-        add_to_trie(indent_one_trie, indent_one[i]);
+    body_indent_trie = make_trie_node();
+    for (int i = 0; i < ASIZE(body_indent); i++) {
+        add_to_trie(body_indent_trie, body_indent[i]);
+    }
+    do_indent_trie = make_trie_node();
+    for (int i = 0; i < ASIZE(do_indent); i++) {
+        add_to_trie(do_indent_trie, do_indent[i]);
     }
 }
 
@@ -426,8 +435,12 @@ bool check_rest(int start, int len, value *val, const char *rest) {
            memcmp(val->start + start, rest, len) == 0;
 }
 
-bool is_indent_one(value *val) {
-    return is_in_trie(indent_one_trie, val->start, val->end);
+static inline bool is_body_indent(value *val) {
+    return is_in_trie(body_indent_trie, val->start, val->end);
+}
+
+static inline bool is_do_indent(value *val) {
+    return is_in_trie(do_indent_trie, val->start, val->end);
 }
 
 void format_collection(collection *coll, char start, char end, FILE *f) {
@@ -441,7 +454,8 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
     ctx->indent = ctx->offset;
 
     if (start == '(' && coll->count > 1 && coll->vals[0]->type == V_SYMBOL) {
-        if (is_indent_one(coll->vals[0])) {
+        if (is_body_indent(coll->vals[0]) ||
+            (is_do_indent(coll->vals[0]) && coll->vals[0]->new_lines)) {
             ctx->indent++;
         } else {
             ctx->indent += (coll->vals[0]->end - coll->vals[0]->start + 1);
