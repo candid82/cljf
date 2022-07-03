@@ -94,14 +94,14 @@
 (defn plus [x y] (+ x y))
 
 (defn plus
-  [x y]
-  (+ x y))
+      [x y]
+      (+ x y))
 
 (defn cast
-  "Throws an error if x is not of a type t, else returns x."
-  {:added "1.0"}
-  [t x]
-  (cast__ t x))
+      "Throws an error if x is not of a type t, else returns x."
+      {:added "1.0"}
+      [t x]
+      (cast__ t x))
 
 (deftest t (is (= 1 2)))
 
@@ -111,22 +111,22 @@
 (def PI 3.14)
 
 (def PI
-  3.14)
+     3.14)
 
 (ns my.test
-  (:require my.test0
-            my.test1
-            [my.test2]
-            [my.test3 :as test3 :refer [f1]])
-  (:import (java.time LocalDateTime ZonedDateTime ZoneId)
-           java.time.format.DateTimeFormatter))
+    (:require my.test0
+     my.test1
+     [my.test2]
+     [my.test3 :as test3 :refer [f1]])
+    (:import (java.time LocalDateTime ZonedDateTime ZoneId)
+     java.time.format.DateTimeFormatter))
 
 (defn test-docstring
-  "Given a multimethod and a dispatch value, returns the dispatch fn
+      "Given a multimethod and a dispatch value, returns the dispatch fn
   that would apply to that value, or nil if none apply and no default"
-  {:added "1.0"}
-  [t]
-  (print "ha
+      {:added "1.0"}
+      [t]
+      (print "ha
          ha"))
 
 (test-call 1 2 3)
@@ -139,13 +139,13 @@
            3)
 
 (test-call
- 1
- 2
- 3)
+           1
+           2
+           3)
 
 (test-call
- 1 2
- 3)
+           1 2
+           3)
 
 @mfatom
 
@@ -155,7 +155,7 @@
 
 #'t
 
-#^:t []
+#^:t[]
 
 #(inc %)
 
@@ -168,22 +168,22 @@
 `(~'t)
 
 (defmacro and
-  "Evaluates exprs one at a time, from left to right. If a form
+          "Evaluates exprs one at a time, from left to right. If a form
   returns logical false (nil or false), and returns that value and
   doesn't evaluate any of the other expressions, otherwise it returns
   the value of the last expr. (and) returns true."
-  {:added "1.0"}
-  ([] true)
-  ([x] x)
-  ([x & next]
-   `(let [and# ~x]
-      (if and# (and ~@next) and#))))
+          {:added "1.0"}
+          ([] true)
+          ([x] x)
+          ([x & next]
+           ` (let [and# ~x]
+               (if and# (and ~@next) and#))))
 
-(def ^{:arglists '([& items])
-       :doc "Creates a new list containing the items."
-       :added "1.0"
-       :tag List}
-  list list__)
+(def ^ {:arglists ' ([& items])
+        :doc "Creates a new list containing the items."
+        :added "1.0"
+        :tag List}
+     list list__)
 
 {1 2 3 4}
 
@@ -196,22 +196,22 @@
 #{1 2
   3 4 5}
 
-[#?(:cljs 1)]
+[#? (:cljs 1)]
 
-(#?(:cljs 1))
+(#? (:cljs 1))
 
 #?(:clj 1)
 
 #?@(:cljs 3)
 
-(def regexp #?(:clj re-pattern
-               :cljs js/XRegExp))
+(def regexp #? (:clj re-pattern
+                :cljs js/XRegExp))
 
 #?(:cljs)
 
 #?(:cljs (let [] 1) :default (let [] 1))
 
-[#?@(:clj 1)]
+[#?@ (:clj 1)]
 
 #:t{:g 1}
 
@@ -225,47 +225,47 @@
 
 #::{g 1}
 
-#inst 1
+#inst1
 
-#uuid 2
+#uuid2
 
-#t 4
+#t4
 
-#g [a]
+#g[a]
 
 (defn ^:private line-seq*
-  [rdr]
-  (when-let [line (reader-read-line__ rdr)]
-    (cons line (lazy-seq (line-seq* rdr)))))
+      [rdr]
+      (when-let [line (reader-read-line__ rdr)]
+        (cons line (lazy-seq (line-seq* rdr)))))
 
 (defrecord StandardInterceptor [name request response]
-  Interceptor
-  (-process-request [{:keys [request]} opts]
-    (request opts))
-  (-process-response [{:keys [response]} xhrio]
-    (response xhrio)))
+           Interceptor
+           (-process-request [{:keys [request]} opts]
+                             (request opts))
+           (-process-response [{:keys [response]} xhrio]
+                              (response xhrio)))
 
 (defprotocol AjaxRequest
   "An abstraction for a running ajax request."
   (-abort [this]
-    "Aborts a running ajax request, if possible."))
+          "Aborts a running ajax request, if possible."))
 
 (extend-protocol IComparable
   Symbol
   (-compare [x y]
-    (if (symbol? y)
-      (compare-symbols x y)
-      (throw (js/Error. (str "Cannot compare " x " to " y)))))
+            (if (symbol? y)
+              (compare-symbols x y)
+              (throw (js/Error. (str "Cannot compare " x " to " y)))))
 
   Keyword
   (-compare [x y]
-    (if (keyword? y)
-      (compare-keywords x y)
-      (throw (js/Error. (str "Cannot compare " x " to " y))))))
+            (if (keyword? y)
+              (compare-keywords x y)
+              (throw (js/Error. (str "Cannot compare " x " to " y))))))
 
 (defmulti ^:private render-at-rule
-  "Render a CSS at-rule"
-  :identifier)
+          "Render a CSS at-rule"
+          :identifier)
 
 (defmethod render-at-rule :default [_] nil)
 
@@ -278,8 +278,8 @@
         queries (when media-queries
                   (render-media-expr media-queries))]
     (str "@import "
-         (if queries (str url " " queries) url)
-         semicolon)))
+      (if queries (str url " " queries) url)
+      semicolon)))
 
 ; test comment
 
@@ -289,20 +289,20 @@
 ; test
 
 (def s
-  "foo
+     "foo
   bar")
 
 ;; TODO: something
 (defn ^:private foo
-  "Some useful
+      "Some useful
   docstring." ; random comment
-  ;; Another random comment
-  []
-  ; Comment inside function body
-  (+ 1 2) ; end of line comment
+      ;; Another random comment
+      []
+      ; Comment inside function body
+      (+ 1 2) ; end of line comment
 
-  ;; Return nil
-  nil)
+      ;; Return nil
+      nil)
 
 #_(+ 1 2)
 
@@ -319,8 +319,7 @@
  ;; test
  :bar 1234
  ;;some comment
- ; :bar "1234"
- }
+ ; :bar "1234"}
 
 (cond
   (= 1 2) 1
@@ -334,44 +333,40 @@
          true identity)
 
 (defn- print-char [c]
-  (-write *out* (condp = c
-                  \backspace "\\backspace"
-                  \tab "\\tab"
-                  \newline "\\newline"
-                  \formfeed "\\formfeed"
-                  \return "\\return"
-                  \" "\\\""
-                  \\ "\\\\"
-                  (str "\\" c))))
+       (-write *out* (condp = c
+                       \backspace "\\backspace"
+                       \tab "\\tab"
+                       \newline "\\newline"
+                       \formfeed "\\formfeed"
+                       \return "\\return"
+                       \" "\\\""
+                       \\ "\\\\"
+                       (str "\\" c))))
 
 (use-fixtures :once
   my-fixture)
 
 (with-something
-  do-something)
+                do-something)
 
 (foor (test-call
-       a
-       ;;asdfds
-       )
+                 a
+                 ;;asdfds)
       1)
 
 [1
 
  ;;sdf
  2
- ;;test
- ]
+ ;;test]
 
 #{1
   ;sdf
   2
-  ;;test
-  }
+  ;;test}
 
 {:t 1
- #_1
- }
+ #_1}
 
 {:t ^:g []
  :g ^:g []}
@@ -383,7 +378,7 @@
 
 #"(?<=[a-z])(?=[A-Z])"
 
-{:t 1,
+{:t 1 ,
  :g 2}
 
 1e-7
