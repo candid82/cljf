@@ -13,6 +13,13 @@
 
 (if)
 
+(if 1
+  2
+  3)
+
+(when 1
+  2)
+
 (fn [a b] 1 2)
 
 (fn [a b]
@@ -92,6 +99,9 @@
     3))
 
 (defn plus [x y] (+ x y))
+
+(defn plus
+  [x y] (+ x y))
 
 (defn plus
   [x y]
