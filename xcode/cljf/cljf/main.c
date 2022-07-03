@@ -423,11 +423,6 @@ value *read_value(void) {
     }
 }
 
-bool check_rest(int start, int len, value *val, const char *rest) {
-    return val->end - (val->start + start) == len &&
-           memcmp(val->start + start, rest, len) == 0;
-}
-
 static inline bool is_body_indent(value *val) {
     return is_in_trie(body_indent_trie, val->start, val->end) ||
            (val->end - val->start > 5 && !memcmp(val->start, "with-", 5));
@@ -440,10 +435,17 @@ static inline bool is_do_indent(value *val) {
 static inline bool is_def_indent(value *val) {
     size_t len = val->end - val->start;
     return !memcmp(val->start, "def", 3) ||
-           (len == 2 && !memcmp(val->start, "if", 2)) ||
+           (len == 2 &&
+            (!memcmp(val->start, "if", 2) || !memcmp(val->start, "ns", 2))) ||
            (len > 3 && !memcmp(val->start, "if-", 3)) ||
            (len == 4 && !memcmp(val->start, "when", 4)) ||
            (len > 5 && !memcmp(val->start, "when-", 5));
+}
+
+static inline bool is_require_indent(value *val) {
+    size_t len = val->end - val->start;
+    return (len == 8 && !memcmp(val->start, ":require", 8)) ||
+           (len == 7 && !memcmp(val->start, ":import", 7));
 }
 
 void format_collection(collection *coll, char start, char end, FILE *f) {
@@ -456,15 +458,27 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
     ctx->offset++;
     ctx->indent = ctx->offset;
 
-    if (start == '(' && coll->count > 1 && coll->vals[0]->type == V_SYMBOL) {
+    if (start == '(' && coll->count > 1) {
         value *v = coll->vals[0];
-        if (is_body_indent(v) || (is_do_indent(v) && v->new_lines)) {
-            ctx->indent++;
-        } else if (is_def_indent(v)) {
-            ctx->indent++;
-            v->new_lines = 0;
-        } else if (!v->new_lines) {
-            ctx->indent += (v->end - v->start + 1);
+        switch (v->type) {
+        case V_SYMBOL:
+            if (is_body_indent(v) || (is_do_indent(v) && v->new_lines)) {
+                ctx->indent++;
+            } else if (is_def_indent(v)) {
+                ctx->indent++;
+                v->new_lines = 0;
+            } else if (!v->new_lines) {
+                ctx->indent += (v->end - v->start + 1);
+            }
+            break;
+        case V_KEYWORD:
+            if (is_require_indent(v)) {
+                ctx->indent += (v->end - v->start + 1);
+                v->new_lines = 0;
+            }
+            break;
+        default:
+            break;
         }
     }
 
