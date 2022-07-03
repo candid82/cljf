@@ -52,7 +52,8 @@ bool is_in_trie(trie_node *root, const char *start, const char *end) {
     trie_node *node = root;
     for (const char *p = start; p != end; p++) {
         int index = p[0] - '!';
-        if (node->rest && !memcmp(node->rest, p, end - p))
+        if (node->rest && !memcmp(node->rest, p, end - p) &&
+            !node->rest[end - p])
             return true;
         if (!node->children[index])
             return false;
@@ -135,7 +136,6 @@ typedef struct {
     value_type type;
     char *start;
     char *end;
-    char *prefix;
     int new_lines;
 } value;
 
@@ -188,17 +188,15 @@ value *make_value(value_type type, char *start, char *end) {
     res->type = type;
     res->start = start;
     res->end = end;
-    res->prefix = NULL;
     res->new_lines = 0;
     return res;
 }
 
-collection *make_collection(value_type type, char *start, char *prefix) {
+collection *make_collection(value_type type, char *start) {
     collection *res = malloc(sizeof(collection));
     memset(res, 0, (sizeof(collection)));
     res->val.type = type;
     res->val.start = start;
-    res->val.prefix = prefix;
     return res;
 }
 
@@ -352,9 +350,9 @@ void skip_whitespace(void) {
 
 bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
-value *read_collection(value_type type, char *start, char end, char *prefix) {
+value *read_collection(value_type type, char *start, char end) {
     ctx->sp++;
-    collection *coll = make_collection(type, start, prefix);
+    collection *coll = make_collection(type, start);
     skip_whitespace();
     while (*ctx->sp != end) {
         ctx->last_read_val = read_value();
@@ -377,11 +375,11 @@ value *read_value(void) {
         return NULL;
     switch (*ctx->sp) {
     case '(':
-        return read_collection(V_LIST, ctx->sp, ')', NULL);
+        return read_collection(V_LIST, ctx->sp, ')');
     case '[':
-        return read_collection(V_VECTOR, ctx->sp, ']', NULL);
+        return read_collection(V_VECTOR, ctx->sp, ']');
     case '{':
-        return read_collection(V_MAP, ctx->sp, '}', NULL);
+        return read_collection(V_MAP, ctx->sp, '}');
     case '"':
         return read_string(V_STRING, ctx->sp);
     case '0':
@@ -409,10 +407,10 @@ value *read_value(void) {
         switch (ctx->sp[1]) {
         case '{':
             ctx->sp++;
-            return read_collection(V_SET, ctx->sp - 1, '}', "#");
+            return read_collection(V_SET, ctx->sp - 1, '}');
         case '(':
             ctx->sp++;
-            return read_collection(V_FN, ctx->sp - 1, ')', "#");
+            return read_collection(V_FN, ctx->sp - 1, ')');
         case '"':
             ctx->sp++;
             return read_string(V_REGEX, ctx->sp - 1);
@@ -448,11 +446,36 @@ static inline bool is_require_indent(value *val) {
            (len == 7 && !memcmp(val->start, ":import", 7));
 }
 
+static inline bool is_prefix(value *val) {
+    if (val->type != V_SYMBOL)
+        return false;
+    switch (length(val)) {
+    case 1:
+        switch (val->start[0]) {
+        case '~':
+        case '`':
+        case '^':
+        case '\'':
+            return true;
+        default:
+            return false;
+        }
+    case 2:
+        return val->start[0] == '#' && val->start[1] == '?';
+    case 3:
+        return val->start[0] == '#' &&
+               ((val->start[1] == '?' && val->start[2] == '@') ||
+                val->start[1] == ':');
+    default:
+        return val->start[0] == '#' && val->start[1] == ':';
+    }
+}
+
 void format_collection(collection *coll, char start, char end, FILE *f) {
     int old_indent = ctx->indent;
-    if (coll->val.prefix) {
-        fputs(coll->val.prefix, f);
-        ctx->offset += strlen(coll->val.prefix);
+    if (coll->val.type == V_FN || coll->val.type == V_SET) {
+        fputc('#', f);
+        ctx->offset++;
     }
     fputc(start, f);
     ctx->offset++;
@@ -487,6 +510,9 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
 
         format_value(val, f);
 
+        if (is_prefix(val))
+            continue;
+
         for (int j = 0; j < val->new_lines; j++) {
             fputc('\n', f);
         }
@@ -496,6 +522,7 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
             }
             ctx->offset = ctx->indent;
         } else {
+
             fputc(' ', f);
             ctx->offset++;
         }
@@ -604,6 +631,9 @@ int main(int argc, char **argv) {
         format_value(ctx->last_read_val, out);
         for (int j = 0; j < ctx->last_read_val->new_lines; j++) {
             fputc('\n', out);
+        }
+        if (!ctx->last_read_val->new_lines && !is_prefix(ctx->last_read_val)) {
+            fputc(' ', out);
         }
     }
     fclose(out);
