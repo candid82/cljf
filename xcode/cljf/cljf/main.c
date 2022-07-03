@@ -446,6 +446,11 @@ static inline bool is_require_indent(value *val) {
            (len == 7 && !memcmp(val->start, ":import", 7));
 }
 
+static inline bool is_comma(value *val) {
+    return val->type == V_SYMBOL && val->start[0] == ',' &&
+           val->start + 1 == val->end;
+}
+
 static inline bool is_prefix(value *val) {
     if (val->type != V_SYMBOL)
         return false;
@@ -461,7 +466,8 @@ static inline bool is_prefix(value *val) {
             return false;
         }
     case 2:
-        return val->start[0] == '#' && val->start[1] == '?';
+        return val->start[0] == '#' &&
+               (val->start[1] == '?' || val->start[1] == '_');
     case 3:
         return val->start[0] == '#' &&
                ((val->start[1] == '?' && val->start[2] == '@') ||
@@ -510,7 +516,7 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
 
         format_value(val, f);
 
-        if (is_prefix(val))
+        if (is_prefix(val) || is_comma(coll->vals[i + 1]))
             continue;
 
         for (int j = 0; j < val->new_lines; j++) {
@@ -529,6 +535,12 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
     }
     if (coll->count) {
         format_value(coll->vals[coll->count - 1], f);
+        if (coll->vals[coll->count - 1]->type == V_COMMENT) {
+            fputc('\n', f);
+            for (int k = 0; k < ctx->indent; k++) {
+                fputc(' ', f);
+            }
+        }
     }
     fputc(end, f);
     ctx->offset++;
