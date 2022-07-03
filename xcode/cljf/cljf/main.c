@@ -430,7 +430,7 @@ bool check_rest(int start, int len, value *val, const char *rest) {
 
 static inline bool is_body_indent(value *val) {
     return is_in_trie(body_indent_trie, val->start, val->end) ||
-           (val->end - val->start > 5) && memcmp(val->start, "with-", 5);
+           (val->end - val->start > 5 && !memcmp(val->start, "with-", 5));
 }
 
 static inline bool is_do_indent(value *val) {
