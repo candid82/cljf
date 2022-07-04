@@ -426,3 +426,7 @@
 000567
 -0123
 -000567
+
+#my.klass_or_type_or_record [:a :b :c]
+
+#my.record {:a 1, :b 2}

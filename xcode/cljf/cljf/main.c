@@ -3,19 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/*
-- commas
-- namespaced maps #:person{:first "Han"} (tag or prefix)
-- #my.klass_or_type_or_record[:a :b :c] (tag)
-- #my.record{:a 1, :b 2} (tag)
-- @form (prefix)
-- ^String (^ is prefix, whole thing is tag?)
-- #'test
-- #_[2]
-- ~, ~@ `
-- #?, #?@
-*/
-
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
 const char *body_indent[] = {
@@ -39,13 +26,13 @@ typedef struct trie_node {
     bool is_terminal;
 } trie_node;
 
-trie_node *make_trie_node(void) {
+static trie_node *make_trie_node(void) {
     trie_node *res = malloc(sizeof(trie_node));
     memset(res, 0, sizeof(trie_node));
     return res;
 }
 
-bool is_in_trie(trie_node *root, const char *start, const char *end) {
+static bool is_in_trie(trie_node *root, const char *start, const char *end) {
     trie_node *node = root;
     for (const char *p = start; p != end; p++) {
         int index = p[0] - '!';
@@ -59,7 +46,7 @@ bool is_in_trie(trie_node *root, const char *start, const char *end) {
     return node->is_terminal || (node->rest && !node->rest[0]);
 }
 
-void add_to_trie(trie_node *node, const char *data) {
+static void add_to_trie(trie_node *node, const char *data) {
     int index = data[0] - '!';
     if (!node->children[index]) {
         node->children[index] = make_trie_node();
@@ -82,6 +69,7 @@ void add_to_trie(trie_node *node, const char *data) {
     }
 }
 
+#ifdef DEBUG
 void print_trie(trie_node *node, int indent) {
     for (int k = 0; k < indent; k++) {
         putchar(' ');
@@ -101,6 +89,7 @@ void print_trie(trie_node *node, int indent) {
         }
     }
 }
+#endif
 
 typedef struct {
     char *input;
@@ -153,9 +142,9 @@ typedef struct {
     bool is_defrecord;
 } context;
 
-value *read_value(void);
-bool is_separator(char c);
-void format_value(value *val, FILE *f);
+static value *read_value(void);
+static bool is_separator(char c);
+static void format_value(value *val, FILE *f);
 
 context *ctx;
 
@@ -164,7 +153,7 @@ trie_node *do_indent_trie;
 
 static inline size_t length(value *val) { return val->end - val->start; }
 
-void pump_tries(void) {
+static void pump_tries(void) {
     body_indent_trie = make_trie_node();
     for (int i = 0; i < ASIZE(body_indent); i++) {
         add_to_trie(body_indent_trie, body_indent[i]);
@@ -175,13 +164,13 @@ void pump_tries(void) {
     }
 }
 
-context *make_context(void) {
+static context *make_context(void) {
     context *ctx = malloc(sizeof(context));
     memset(ctx, 0, sizeof(context));
     return ctx;
 }
 
-value *make_value(value_type type, char *start, char *end) {
+static value *make_value(value_type type, char *start, char *end) {
     value *res = malloc(sizeof(value));
     res->type = type;
     res->start = start;
@@ -190,7 +179,7 @@ value *make_value(value_type type, char *start, char *end) {
     return res;
 }
 
-collection *make_collection(value_type type, char *start) {
+static collection *make_collection(value_type type, char *start) {
     collection *res = malloc(sizeof(collection));
     memset(res, 0, (sizeof(collection)));
     res->val.type = type;
@@ -198,9 +187,9 @@ collection *make_collection(value_type type, char *start) {
     return res;
 }
 
-bool is_collection(value *val) { return val->type >= V_LIST; }
+static bool is_collection(value *val) { return val->type >= V_LIST; }
 
-void add_to_coll(collection *coll, value *v) {
+static void add_to_coll(collection *coll, value *v) {
     if (coll->count == coll->capacity) {
         coll->capacity = coll->capacity ? coll->capacity * 2 : 4;
         coll->vals = realloc(coll->vals, coll->capacity * sizeof(value *));
@@ -208,12 +197,13 @@ void add_to_coll(collection *coll, value *v) {
     coll->vals[coll->count++] = v;
 }
 
-void print_usage(void) {
+static void print_usage(void) {
     fprintf(stderr, "Usage: cljf <filename> [-o <filename>]\n");
     exit(1);
 }
 
-void print_value(value *val) {
+#ifdef DEBUG
+static void print_value(value *val) {
     printf("%s[%ld]: %.*s\n", value_type_names[val->type], length(val),
            (int)(length(val)), val->start);
     if (is_collection(val)) {
@@ -223,15 +213,16 @@ void print_value(value *val) {
         }
     }
 }
+#endif
 
-value *read_char(void) {
+static value *read_char(void) {
     char *start = ctx->sp;
     for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++)
         ;
     return make_value(V_CHAR, start, ctx->sp);
 }
 
-value *read_string(value_type type, char *start) {
+static value *read_string(value_type type, char *start) {
     bool slash = false;
     for (ctx->sp++; *ctx->sp != '"' || slash; ctx->sp++) {
         switch (*ctx->sp) {
@@ -251,7 +242,7 @@ value *read_string(value_type type, char *start) {
     return make_value(type, start, ctx->sp);
 }
 
-bool is_whitespace(char c) {
+static bool is_whitespace(char c) {
     // Note: doesn't handle unicode whitespaces (yet?).
     switch (c) {
     case ' ':
@@ -270,7 +261,7 @@ bool is_whitespace(char c) {
     }
 }
 
-bool is_separator(char c) {
+static bool is_separator(char c) {
     if (is_whitespace(c))
         return true;
     switch (c) {
@@ -288,21 +279,21 @@ bool is_separator(char c) {
     }
 }
 
-value *read_number(void) {
+static value *read_number(void) {
     char *start = ctx->sp;
     for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++)
         ;
     return make_value(V_NUMBER, start, ctx->sp);
 }
 
-value *read_comment(void) {
+static value *read_comment(void) {
     char *start = ctx->sp;
     for (ctx->sp++; *ctx->sp != '\n'; ctx->sp++)
         ;
     return make_value(V_COMMENT, start, ctx->sp);
 }
 
-value *read_symbol(void) {
+static value *read_symbol(void) {
     char *start = ctx->sp;
     for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++)
         ;
@@ -330,14 +321,14 @@ value *read_symbol(void) {
     return make_value(t, start, ctx->sp);
 }
 
-value *read_keyword(void) {
+static value *read_keyword(void) {
     char *start = ctx->sp;
     for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++)
         ;
     return make_value(V_KEYWORD, start, ctx->sp);
 }
 
-void skip_whitespace(void) {
+static void skip_whitespace(void) {
     while (is_whitespace(*ctx->sp)) {
         if (ctx->last_read_val && *ctx->sp == '\n') {
             ctx->last_read_val->new_lines++;
@@ -346,9 +337,9 @@ void skip_whitespace(void) {
     }
 }
 
-bool is_digit(char c) { return c >= '0' && c <= '9'; }
+static bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
-value *read_collection(value_type type, char *start, char end) {
+static value *read_collection(value_type type, char *start, char end) {
     ctx->sp++;
     collection *coll = make_collection(type, start);
     skip_whitespace();
@@ -367,7 +358,7 @@ value *read_collection(value_type type, char *start, char end) {
     return (value *)coll;
 }
 
-value *read_value(void) {
+static value *read_value(void) {
     skip_whitespace();
     if (!*ctx->sp)
         return NULL;
@@ -476,7 +467,7 @@ static inline bool is_prefix(value *val) {
     }
 }
 
-void format_collection(collection *coll, char start, char end, FILE *f) {
+static void format_collection(collection *coll, char start, char end, FILE *f) {
     int old_indent = ctx->indent;
     if (coll->val.type == V_FN || coll->val.type == V_SET) {
         fputc('#', f);
@@ -560,7 +551,7 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
     ctx->is_defrecord = old_is_defrecord;
 }
 
-void format_value(value *val, FILE *f) {
+static void format_value(value *val, FILE *f) {
     switch (val->type) {
     case V_LIST:
         format_collection((collection *)val, '(', ')', f);
@@ -586,7 +577,7 @@ void format_value(value *val, FILE *f) {
     }
 }
 
-void read_file(const char *filename, context *ctx) {
+static void read_file(const char *filename, context *ctx) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
         fprintf(stderr, "Cannot open file: %s\n", filename);
@@ -606,7 +597,7 @@ void read_file(const char *filename, context *ctx) {
     ctx->bytes[size] = '\0';
 }
 
-void parse_args(int argc, char **argv, options *opts) {
+static void parse_args(int argc, char **argv, options *opts) {
     if (argc == 2) {
         opts->input = argv[1];
         opts->output = NULL;
