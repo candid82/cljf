@@ -1,20 +1,22 @@
+#include <dirent.h>
 #include <memory.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
+#define MAX_PATH_SIZE 2048
 
 const char *body_indent[] = {
-    "fn",      "bound-fn",     "case",        "cond",    "cond->",
-    "cond->>", "as->",         "condp",       "while",   "future",
-    "thread", // with-
-    "comment", "doto",         "locking",     "proxy",   "reify",
-    "fdef",    "extend",       "extend-type", "catch",   "let",
-    "letfn",   "binding",      "loop",        "for",     "go-loop",
-    "doseq",   "dotimes",      "struct-map",  "testing", "are",
-    "context", "use-fixtures", "POST",        "GET",     "PUT",
-    "DELETE",  "handler-case", "handle",      "dotrace", "match"};
+    "fn",      "bound-fn", "case",         "cond",        "cond->",
+    "cond->>", "as->",     "condp",        "while",       "future",
+    "thread",  "comment",  "doto",         "locking",     "proxy",
+    "reify",   "fdef",     "extend",       "extend-type", "catch",
+    "let",     "letfn",    "binding",      "loop",        "for",
+    "go-loop", "doseq",    "dotimes",      "struct-map",  "testing",
+    "are",     "context",  "use-fixtures", "POST",        "GET",
+    "PUT",     "DELETE",   "handler-case", "handle",      "dotrace",
+    "match"};
 
 const char *do_indent[] = {"do", "try", "finally", "go", "alt!", "alt!!"};
 
@@ -150,6 +152,9 @@ context *ctx;
 
 trie_node *body_indent_trie;
 trie_node *do_indent_trie;
+
+char current_path[MAX_PATH_SIZE + 1];
+char *path_end;
 
 static inline size_t length(value *val) { return val->end - val->start; }
 
@@ -600,7 +605,7 @@ static void read_file(const char *filename, context *ctx) {
 static void parse_args(int argc, char **argv, options *opts) {
     if (argc == 2) {
         opts->input = argv[1];
-        opts->output = NULL;
+        opts->output = argv[1];
         return;
     }
 
@@ -620,21 +625,26 @@ static void parse_args(int argc, char **argv, options *opts) {
     print_usage();
 }
 
-int main(int argc, char **argv) {
-    options opts;
-    parse_args(argc, argv, &opts);
+bool is_clj(const char *filename) {
+    size_t len = strlen(filename);
+    if (len < 5)
+        return false;
+    return (!strcmp(filename + (len - 4), ".clj") ||
+            !strcmp(filename + (len - 5), ".cljs") ||
+            !strcmp(filename + (len - 5), ".cljc") ||
+            !strcmp(filename + (len - 5), ".joke"));
+}
 
-    pump_tries();
-
+void format_file(const char *input, const char *output) {
     ctx = make_context();
-    read_file(opts.input, ctx);
+    read_file(input, ctx);
 
     FILE *out = stdout;
 
-    if (opts.output) {
-        out = fopen(opts.output, "wb");
+    if (output) {
+        out = fopen(output, "wb");
         if (!out) {
-            fprintf(stderr, "Cannot open file for writing: %s\n", opts.output);
+            fprintf(stderr, "Cannot open file for writing: %s\n", output);
             exit(2);
         }
     }
@@ -652,4 +662,75 @@ int main(int argc, char **argv) {
         }
     }
     fclose(out);
+}
+
+void traverse_dir(void) {
+    DIR *d = opendir(current_path);
+    if (!d) {
+        fprintf(stderr, "Cannot open directory: %s", current_path);
+        exit(2);
+    }
+    path_end[0] = '/';
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL) {
+        switch (de->d_type) {
+        case DT_REG:
+            if (is_clj(de->d_name)) {
+                char *old_path_end = path_end;
+                path_end =
+                    stpncpy(path_end + 1, de->d_name,
+                            MAX_PATH_SIZE - (path_end + 1 - current_path));
+                if (path_end == current_path + MAX_PATH_SIZE) {
+                    current_path[MAX_PATH_SIZE] = '\0';
+                    fprintf(stderr, "Path is too long: %s\n", current_path);
+                    exit(2);
+                }
+                format_file(current_path, current_path);
+                path_end = old_path_end;
+            }
+            break;
+        case DT_DIR: {
+            if (de->d_name[0] == '.' &&
+                (!de->d_name[1] || (de->d_name[1] == '.' && !de->d_name[2])))
+                break;
+            char *old_path_end = path_end;
+            path_end = stpncpy(path_end + 1, de->d_name,
+                               MAX_PATH_SIZE - (path_end + 1 - current_path));
+            if (path_end == current_path + MAX_PATH_SIZE) {
+                current_path[MAX_PATH_SIZE] = '\0';
+                fprintf(stderr, "Path is too long: %s\n", current_path);
+                exit(2);
+            }
+            traverse_dir();
+            path_end = old_path_end;
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    closedir(d);
+}
+
+void format_dir(const char *path) {
+    path_end = stpncpy(current_path, path, MAX_PATH_SIZE);
+    if (path_end == current_path + MAX_PATH_SIZE) {
+        fprintf(stderr, "Path is too long: %s\n", path);
+        exit(2);
+    }
+    traverse_dir();
+}
+
+int main(int argc, char **argv) {
+    options opts;
+    parse_args(argc, argv, &opts);
+    pump_tries();
+
+    DIR *d;
+    if ((d = opendir(opts.input))) {
+        closedir(d);
+        format_dir(opts.input);
+    } else {
+        format_file(opts.input, opts.output);
+    }
 }
