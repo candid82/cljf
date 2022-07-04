@@ -19,18 +19,15 @@
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 
 const char *body_indent[] = {
-    "fn",          "bound-fn", "case",         "cond",
-    "cond->",      "cond->>",  "as->",         "condp",
-    "while",       "future",
+    "fn",      "bound-fn",     "case",        "cond",    "cond->",
+    "cond->>", "as->",         "condp",       "while",   "future",
     "thread", // with-
-    "comment",     "doto",     "locking",      "proxy",
-    "reify",       "fdef",     "extend",       "extend-protocol",
-    "extend-type", "catch",    "let",          "letfn",
-    "binding",     "loop",     "for",          "go-loop",
-    "doseq",       "dotimes",  "struct-map",   "testing",
-    "are",         "context",  "use-fixtures", "POST",
-    "GET",         "PUT",      "DELETE",       "handler-case",
-    "handle",      "dotrace",  "match"};
+    "comment", "doto",         "locking",     "proxy",   "reify",
+    "fdef",    "extend",       "extend-type", "catch",   "let",
+    "letfn",   "binding",      "loop",        "for",     "go-loop",
+    "doseq",   "dotimes",      "struct-map",  "testing", "are",
+    "context", "use-fixtures", "POST",        "GET",     "PUT",
+    "DELETE",  "handler-case", "handle",      "dotrace", "match"};
 
 const char *do_indent[] = {"do", "try", "finally", "go", "alt!", "alt!!"};
 
@@ -153,6 +150,7 @@ typedef struct {
     char *sp;
     int indent;
     int offset;
+    bool is_defrecord;
 } context;
 
 value *read_value(void);
@@ -437,7 +435,8 @@ static inline bool is_def_indent(value *val) {
             (!memcmp(val->start, "if", 2) || !memcmp(val->start, "ns", 2))) ||
            (len > 3 && !memcmp(val->start, "if-", 3)) ||
            (len == 4 && !memcmp(val->start, "when", 4)) ||
-           (len > 5 && !memcmp(val->start, "when-", 5));
+           (len > 5 && !memcmp(val->start, "when-", 5)) ||
+           (len == 15 && !memcmp(val->start, "extend-protocol", 15));
 }
 
 static inline bool is_require_indent(value *val) {
@@ -487,15 +486,25 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
     ctx->offset++;
     ctx->indent = ctx->offset;
 
+    bool is_defrecord = false;
+    bool old_is_defrecord = ctx->is_defrecord;
+
     if (start == '(' && coll->count > 1) {
         value *v = coll->vals[0];
         switch (v->type) {
         case V_SYMBOL:
-            if (is_body_indent(v) || (is_do_indent(v) && v->new_lines)) {
+            if (ctx->is_defrecord || is_body_indent(v) ||
+                (is_do_indent(v) && v->new_lines)) {
                 ctx->indent++;
             } else if (is_def_indent(v)) {
                 ctx->indent++;
                 v->new_lines = 0;
+                size_t len = length(v);
+                if ((len == 9 && !memcmp(v->start, "defrecord", 9)) ||
+                    (len == 11 && !memcmp(v->start, "defprotocol", 11)) ||
+                    (len == 15 && !memcmp(v->start, "extend-protocol", 15))) {
+                    is_defrecord = true;
+                }
             } else if (!v->new_lines) {
                 ctx->indent += (v->end - v->start + 1);
             }
@@ -510,6 +519,8 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
             break;
         }
     }
+
+    ctx->is_defrecord = is_defrecord;
 
     for (int i = 0; i < coll->count - 1; i++) {
         value *val = coll->vals[i];
@@ -546,6 +557,7 @@ void format_collection(collection *coll, char start, char end, FILE *f) {
     ctx->offset++;
 
     ctx->indent = old_indent;
+    ctx->is_defrecord = old_is_defrecord;
 }
 
 void format_value(value *val, FILE *f) {
