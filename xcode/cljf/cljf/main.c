@@ -1,4 +1,6 @@
 #include <dirent.h>
+#include <errno.h>
+#include <fts.h>
 #include <memory.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -71,28 +73,6 @@ static void add_to_trie(trie_node *node, const char *data) {
     }
 }
 
-#ifdef DEBUG
-void print_trie(trie_node *node, int indent) {
-    for (int k = 0; k < indent; k++) {
-        putchar(' ');
-    }
-    if (node->rest) {
-        printf("%d: %s\n", node->is_terminal, node->rest);
-    } else {
-        printf("%d\n", node->is_terminal);
-        for (int i = 0; i < TRIE_CHILDREN_NUM; i++) {
-            if (node->children[i]) {
-                for (int k = 0; k < indent; k++) {
-                    putchar(' ');
-                }
-                printf("%c: ", i + '!');
-                print_trie(node->children[i], indent + 3);
-            }
-        }
-    }
-}
-#endif
-
 typedef struct {
     char *input;
     char *output;
@@ -153,9 +133,6 @@ context *ctx;
 trie_node *body_indent_trie;
 trie_node *do_indent_trie;
 
-char current_path[MAX_PATH_SIZE + 1];
-char *path_end;
-
 static inline size_t length(value *val) { return val->end - val->start; }
 
 static void pump_tries(void) {
@@ -192,8 +169,6 @@ static collection *make_collection(value_type type, char *start) {
     return res;
 }
 
-static bool is_collection(value *val) { return val->type >= V_LIST; }
-
 static void add_to_coll(collection *coll, value *v) {
     if (coll->count == coll->capacity) {
         coll->capacity = coll->capacity ? coll->capacity * 2 : 4;
@@ -206,19 +181,6 @@ static void print_usage(void) {
     fprintf(stderr, "Usage: cljf <filename> [-o <filename>]\n");
     exit(1);
 }
-
-#ifdef DEBUG
-static void print_value(value *val) {
-    printf("%s[%ld]: %.*s\n", value_type_names[val->type], length(val),
-           (int)(length(val)), val->start);
-    if (is_collection(val)) {
-        collection *coll = (collection *)val;
-        for (int i = 0; i < coll->count; i++) {
-            print_value(coll->vals[i]);
-        }
-    }
-}
-#endif
 
 static value *read_char(void) {
     char *start = ctx->sp;
@@ -664,61 +626,32 @@ void format_file(const char *input, const char *output) {
     fclose(out);
 }
 
-void traverse_dir(void) {
-    DIR *d = opendir(current_path);
-    if (!d) {
-        fprintf(stderr, "Cannot open directory: %s", current_path);
+void format_dir(char *path) {
+    char *paths[] = {path, NULL};
+    FTS *ftsp = fts_open(paths, FTS_LOGICAL | FTS_NOSTAT, NULL);
+    if (!ftsp) {
+        fprintf(stderr, "Cannot open directory: %s\n", path);
         exit(2);
     }
-    path_end[0] = '/';
-    struct dirent *de;
-    while ((de = readdir(d)) != NULL) {
-        switch (de->d_type) {
-        case DT_REG:
-            if (is_clj(de->d_name)) {
-                char *old_path_end = path_end;
-                path_end =
-                    stpncpy(path_end + 1, de->d_name,
-                            MAX_PATH_SIZE - (path_end + 1 - current_path));
-                if (path_end == current_path + MAX_PATH_SIZE) {
-                    current_path[MAX_PATH_SIZE] = '\0';
-                    fprintf(stderr, "Path is too long: %s\n", current_path);
-                    exit(2);
-                }
-                format_file(current_path, current_path);
-                path_end = old_path_end;
+    FTSENT *ent;
+    while ((ent = fts_read(ftsp))) {
+        switch (ent->fts_info) {
+        case FTS_D:
+            if (ent->fts_name[0] == '.') {
+                fts_set(ftsp, ent, FTS_SKIP);
             }
             break;
-        case DT_DIR: {
-            if (de->d_name[0] == '.' &&
-                (!de->d_name[1] || (de->d_name[1] == '.' && !de->d_name[2])))
-                break;
-            char *old_path_end = path_end;
-            path_end = stpncpy(path_end + 1, de->d_name,
-                               MAX_PATH_SIZE - (path_end + 1 - current_path));
-            if (path_end == current_path + MAX_PATH_SIZE) {
-                current_path[MAX_PATH_SIZE] = '\0';
-                fprintf(stderr, "Path is too long: %s\n", current_path);
-                exit(2);
+        case FTS_NSOK: // Means regular file since FTS_NOSTAT was passed to
+                       // fts_open.
+            if (is_clj(ent->fts_name)) {
+                format_file(ent->fts_accpath, ent->fts_accpath);
             }
-            traverse_dir();
-            path_end = old_path_end;
             break;
-        }
         default:
             break;
         }
     }
-    closedir(d);
-}
-
-void format_dir(const char *path) {
-    path_end = stpncpy(current_path, path, MAX_PATH_SIZE);
-    if (path_end == current_path + MAX_PATH_SIZE) {
-        fprintf(stderr, "Path is too long: %s\n", path);
-        exit(2);
-    }
-    traverse_dir();
+    fts_close(ftsp);
 }
 
 int main(int argc, char **argv) {
