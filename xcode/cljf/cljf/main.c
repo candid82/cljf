@@ -104,6 +104,7 @@ typedef struct {
     value_type type;
     char *start;
     char *end;
+    char *name_start;
     int new_lines;
 } value;
 
@@ -156,6 +157,7 @@ static value *make_value(value_type type, char *start, char *end) {
     value *res = malloc(sizeof(value));
     res->type = type;
     res->start = start;
+    res->name_start = start;
     res->end = end;
     res->new_lines = 0;
     return res;
@@ -262,8 +264,12 @@ static value *read_comment(void) {
 
 static value *read_symbol(void) {
     char *start = ctx->sp;
-    for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++)
-        ;
+    char *name_start = ctx->sp;
+    for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++) {
+        if ((*ctx->sp) == '/') {
+            name_start = ctx->sp + 1;
+        }
+    }
     value_type t = V_SYMBOL;
     size_t len = ctx->sp - start;
     if (len == 3 && start[0] == 'n' && start[1] == 'i' && start[2] == 'l') {
@@ -285,7 +291,9 @@ static value *read_symbol(void) {
                start[5] == 'f') {
         t = V_NUMBER;
     }
-    return make_value(t, start, ctx->sp);
+    value *res = make_value(t, start, ctx->sp);
+    res->name_start = name_start;
+    return res;
 }
 
 static value *read_keyword(void) {
@@ -378,23 +386,24 @@ static value *read_value(void) {
 }
 
 static inline bool is_body_indent(value *val) {
-    return is_in_trie(body_indent_trie, val->start, val->end) ||
-           (val->end - val->start > 5 && !memcmp(val->start, "with-", 5));
+    return is_in_trie(body_indent_trie, val->name_start, val->end) ||
+           (val->end - val->name_start > 5 &&
+            !memcmp(val->name_start, "with-", 5));
 }
 
 static inline bool is_do_indent(value *val) {
-    return is_in_trie(do_indent_trie, val->start, val->end);
+    return is_in_trie(do_indent_trie, val->name_start, val->end);
 }
 
 static inline bool is_def_indent(value *val) {
-    size_t len = val->end - val->start;
-    return !memcmp(val->start, "def", 3) ||
-           (len == 2 &&
-            (!memcmp(val->start, "if", 2) || !memcmp(val->start, "ns", 2))) ||
-           (len > 3 && !memcmp(val->start, "if-", 3)) ||
-           (len == 4 && !memcmp(val->start, "when", 4)) ||
-           (len > 5 && !memcmp(val->start, "when-", 5)) ||
-           (len == 15 && !memcmp(val->start, "extend-protocol", 15));
+    size_t len = val->end - val->name_start;
+    return !memcmp(val->name_start, "def", 3) ||
+           (len == 2 && (!memcmp(val->name_start, "if", 2) ||
+                         !memcmp(val->name_start, "ns", 2))) ||
+           (len > 3 && !memcmp(val->name_start, "if-", 3)) ||
+           (len == 4 && !memcmp(val->name_start, "when", 4)) ||
+           (len > 5 && !memcmp(val->name_start, "when-", 5)) ||
+           (len == 15 && !memcmp(val->name_start, "extend-protocol", 15));
 }
 
 static inline bool is_require_indent(value *val) {
@@ -457,10 +466,11 @@ static void format_collection(collection *coll, char start, char end, FILE *f) {
             } else if (is_def_indent(v)) {
                 ctx->indent++;
                 v->new_lines = 0;
-                size_t len = length(v);
-                if ((len == 9 && !memcmp(v->start, "defrecord", 9)) ||
-                    (len == 11 && !memcmp(v->start, "defprotocol", 11)) ||
-                    (len == 15 && !memcmp(v->start, "extend-protocol", 15))) {
+                size_t len = v->end - v->name_start;
+                if ((len == 9 && !memcmp(v->name_start, "defrecord", 9)) ||
+                    (len == 11 && !memcmp(v->name_start, "defprotocol", 11)) ||
+                    (len == 15 &&
+                     !memcmp(v->name_start, "extend-protocol", 15))) {
                     is_defrecord = true;
                 }
             } else if (!v->new_lines) {
