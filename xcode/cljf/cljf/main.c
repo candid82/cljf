@@ -264,7 +264,7 @@ static value *read_number(void) {
 
 static value *read_comment(void) {
     char *start = ctx->sp;
-    for (ctx->sp++; *ctx->sp != '\n'; ctx->sp++)
+    for (ctx->sp++; *ctx->sp != '\n' && *ctx->sp; ctx->sp++)
         ;
     return make_value(V_COMMENT, start, ctx->sp);
 }
