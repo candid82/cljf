@@ -10,15 +10,14 @@
 #define MAX_PATH_SIZE 2048
 
 const char *body_indent[] = {
-    "fn",      "bound-fn", "case",         "cond",        "cond->",
-    "cond->>", "as->",     "condp",        "while",       "future",
-    "thread",  "comment",  "doto",         "locking",     "proxy",
-    "reify",   "fdef",     "extend",       "extend-type", "catch",
-    "let",     "letfn",    "binding",      "loop",        "for",
-    "go-loop", "doseq",    "dotimes",      "struct-map",  "testing",
-    "are",     "context",  "use-fixtures", "POST",        "GET",
-    "PUT",     "DELETE",   "handler-case", "handle",      "dotrace",
-    "match"};
+    "fn",      "bound-fn",     "case",        "cond",    "cond->",
+    "cond->>", "as->",         "condp",       "while",   "future",
+    "thread",  "comment",      "doto",        "locking", "proxy",
+    "fdef",    "extend",       "extend-type", "catch",   "let",
+    "letfn",   "binding",      "loop",        "for",     "go-loop",
+    "doseq",   "dotimes",      "struct-map",  "testing", "are",
+    "context", "use-fixtures", "POST",        "GET",     "PUT",
+    "DELETE",  "handler-case", "handle",      "dotrace", "match"};
 
 const char *do_indent[] = {"do", "try", "finally", "go", "alt!", "alt!!"};
 
@@ -120,6 +119,7 @@ typedef struct {
     size_t size;
     char *bytes;
     char *sp;
+    const char *filename;
     int indent;
     int offset;
     bool is_defrecord;
@@ -186,7 +186,12 @@ static void print_usage(void) {
 
 static value *read_char(void) {
     char *start = ctx->sp;
-    for (ctx->sp++; !is_separator(*ctx->sp); ctx->sp++)
+    if (!ctx->sp[1]) {
+        fprintf(stderr, "Unexpected end of file while reading a char\n");
+        fprintf(stderr, "File: %s\n", ctx->filename);
+        exit(4);
+    }
+    for (ctx->sp += 2; !is_separator(*ctx->sp); ctx->sp++)
         ;
     return make_value(V_CHAR, start, ctx->sp);
 }
@@ -197,6 +202,7 @@ static value *read_string(value_type type, char *start) {
         switch (*ctx->sp) {
         case '\0':
             fprintf(stderr, "Unexpected end of file while reading a string\n");
+            fprintf(stderr, "File: %s\n", ctx->filename);
             exit(4);
             break;
         case '\\':
@@ -242,6 +248,7 @@ static bool is_separator(char c) {
     case '{':
     case '}':
     case ',':
+    case '"':
         return true;
     default:
         return false;
@@ -323,6 +330,7 @@ static value *read_collection(value_type type, char *start, char end) {
         if (!ctx->last_read_val) {
             fprintf(stderr,
                     "Unexpected end of file while reading a collection\n");
+            fprintf(stderr, "File: %s\n", ctx->filename);
             exit(4);
         }
         add_to_coll(coll, ctx->last_read_val);
@@ -402,6 +410,7 @@ static inline bool is_def_indent(value *val) {
                          !memcmp(val->name_start, "ns", 2))) ||
            (len > 3 && !memcmp(val->name_start, "if-", 3)) ||
            (len == 4 && !memcmp(val->name_start, "when", 4)) ||
+           (len == 5 && !memcmp(val->name_start, "reify", 5)) ||
            (len > 5 && !memcmp(val->name_start, "when-", 5)) ||
            (len == 15 && !memcmp(val->name_start, "extend-protocol", 15));
 }
@@ -427,6 +436,7 @@ static inline bool is_prefix(value *val) {
         case '`':
         case '^':
         case '\'':
+        case '@':
             return true;
         default:
             return false;
@@ -467,7 +477,8 @@ static void format_collection(collection *coll, char start, char end, FILE *f) {
                 ctx->indent++;
                 v->new_lines = 0;
                 size_t len = v->end - v->name_start;
-                if ((len == 9 && !memcmp(v->name_start, "defrecord", 9)) ||
+                if ((len == 5 && !memcmp(v->name_start, "reify", 5)) ||
+                    (len == 9 && !memcmp(v->name_start, "defrecord", 9)) ||
                     (len == 11 && !memcmp(v->name_start, "defprotocol", 11)) ||
                     (len == 15 &&
                      !memcmp(v->name_start, "extend-protocol", 15))) {
@@ -572,6 +583,7 @@ static void read_file(const char *filename, context *ctx) {
     }
     fclose(f);
     ctx->bytes[size] = '\0';
+    ctx->filename = filename;
 }
 
 static void parse_args(int argc, char **argv, options *opts) {
@@ -611,6 +623,12 @@ void format_file(const char *input, const char *output) {
     ctx = make_context();
     read_file(input, ctx);
 
+    collection *forms = make_collection(V_VECTOR, NULL);
+
+    while ((ctx->last_read_val = read_value())) {
+        add_to_coll(forms, ctx->last_read_val);
+    }
+
     FILE *out = stdout;
 
     if (output) {
@@ -621,18 +639,19 @@ void format_file(const char *input, const char *output) {
         }
     }
 
-    while ((ctx->last_read_val = read_value())) {
-        skip_whitespace();
+    for (int i = 0; i < forms->count; i++) {
+        value *val = forms->vals[i];
         ctx->offset = 0;
         ctx->indent = 0;
-        format_value(ctx->last_read_val, out);
-        for (int j = 0; j < ctx->last_read_val->new_lines; j++) {
+        format_value(val, out);
+        for (int j = 0; j < val->new_lines; j++) {
             fputc('\n', out);
         }
-        if (!ctx->last_read_val->new_lines && !is_prefix(ctx->last_read_val)) {
+        if (!val->new_lines && i < forms->count - 1 && !is_prefix(val)) {
             fputc(' ', out);
         }
     }
+
     fclose(out);
 }
 
