@@ -10,14 +10,14 @@
 #define MAX_PATH_SIZE 2048
 
 const char *body_indent[] = {
-    "fn",      "bound-fn",     "case",        "cond",    "cond->",
-    "cond->>", "as->",         "condp",       "while",   "future",
-    "thread",  "comment",      "doto",        "locking", "proxy",
-    "fdef",    "extend",       "extend-type", "catch",   "let",
-    "letfn",   "binding",      "loop",        "for",     "go-loop",
-    "doseq",   "dotimes",      "struct-map",  "testing", "are",
-    "context", "use-fixtures", "POST",        "GET",     "PUT",
-    "DELETE",  "handler-case", "handle",      "dotrace", "match"};
+    "fn",         "bound-fn", "case",    "cond",    "cond->",
+    "cond->>",    "as->",     "condp",   "while",   "future",
+    "thread",     "comment",  "doto",    "locking", "fdef",
+    "extend",     "catch",    "let",     "letfn",   "binding",
+    "loop",       "for",      "go-loop", "doseq",   "dotimes",
+    "struct-map", "testing",  "are",     "context", "use-fixtures",
+    "POST",       "GET",      "PUT",     "DELETE",  "handler-case",
+    "handle",     "dotrace",  "match"};
 
 const char *do_indent[] = {"do", "try", "finally", "go", "alt!", "alt!!"};
 
@@ -410,7 +410,9 @@ static inline bool is_def_indent(value *val) {
                          !memcmp(val->name_start, "ns", 2))) ||
            (len > 3 && !memcmp(val->name_start, "if-", 3)) ||
            (len == 4 && !memcmp(val->name_start, "when", 4)) ||
-           (len == 5 && !memcmp(val->name_start, "reify", 5)) ||
+           (len == 5 && (!memcmp(val->name_start, "reify", 5) ||
+                         !memcmp(val->name_start, "proxy", 5))) ||
+           (len == 11 && !memcmp(val->name_start, "extend-type", 11)) ||
            (len > 5 && !memcmp(val->name_start, "when-", 5)) ||
            (len == 15 && !memcmp(val->name_start, "extend-protocol", 15));
 }
@@ -477,9 +479,12 @@ static void format_collection(collection *coll, char start, char end, FILE *f) {
                 ctx->indent++;
                 v->new_lines = 0;
                 size_t len = v->end - v->name_start;
-                if ((len == 5 && !memcmp(v->name_start, "reify", 5)) ||
+                if ((len == 5 && (!memcmp(v->name_start, "reify", 5) ||
+                                  !memcmp(v->name_start, "proxy", 5))) ||
                     (len == 9 && !memcmp(v->name_start, "defrecord", 9)) ||
-                    (len == 11 && !memcmp(v->name_start, "defprotocol", 11)) ||
+                    (len == 11 &&
+                     (!memcmp(v->name_start, "defprotocol", 11) ||
+                      !memcmp(v->name_start, "extend-type", 11))) ||
                     (len == 15 &&
                      !memcmp(v->name_start, "extend-protocol", 15))) {
                     is_defrecord = true;
@@ -641,15 +646,16 @@ void format_file(const char *input, const char *output) {
 
     for (int i = 0; i < forms->count; i++) {
         value *val = forms->vals[i];
-        ctx->offset = 0;
-        ctx->indent = 0;
         format_value(val, out);
         for (int j = 0; j < val->new_lines; j++) {
             fputc('\n', out);
+            ctx->offset = 0;
         }
         if (!val->new_lines && i < forms->count - 1 && !is_prefix(val)) {
             fputc(' ', out);
+            ctx->offset++;
         }
+        ctx->indent = 0;
     }
 
     fclose(out);
