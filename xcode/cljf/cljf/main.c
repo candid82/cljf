@@ -249,6 +249,8 @@ static bool is_separator(char c) {
     case '}':
     case ',':
     case '"':
+    case ';':
+    case '\\':
         return true;
     default:
         return false;

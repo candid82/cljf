@@ -441,3 +441,5 @@
           :thread (.getName (Thread/currentThread))
           ~@kvs))
    nil) )
+
+(fn [s] (str \\ \{ \\ \{ s \\ \} \\ \}))
