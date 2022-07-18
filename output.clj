@@ -433,3 +433,11 @@
 
 #?(:cljs
    :test)
+
+`(when *enable-trace*
+   (tap> (array-map
+          :in (extract-in)
+          ~@(when trace-line [:line trace-line])
+          :thread (.getName (Thread/currentThread))
+          ~@kvs))
+   nil) )
