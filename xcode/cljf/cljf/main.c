@@ -10,16 +10,17 @@
 #define MAX_PATH_SIZE 2048
 
 const char *body_indent[] = {
-    "fn",         "bound-fn", "case",    "cond",    "cond->",
-    "cond->>",    "as->",     "condp",   "while",   "future",
-    "thread",     "comment",  "doto",    "locking", "fdef",
-    "extend",     "catch",    "let",     "letfn",   "binding",
-    "loop",       "for",      "go-loop", "doseq",   "dotimes",
-    "struct-map", "testing",  "are",     "context", "use-fixtures",
-    "POST",       "GET",      "PUT",     "DELETE",  "handler-case",
-    "handle",     "dotrace",  "match"};
+    "fn",      "bound-fn", "case",    "cond->",       "cond->>",
+    "as->",    "condp",    "while",   "future",       "thread",
+    "comment", "doto",     "locking", "fdef",         "extend",
+    "catch",   "let",      "letfn",   "binding",      "loop",
+    "for",     "go-loop",  "doseq",   "dotimes",      "struct-map",
+    "testing", "are",      "context", "use-fixtures", "POST",
+    "GET",     "PUT",      "DELETE",  "handler-case", "handle",
+    "dotrace", "match"};
 
-const char *do_indent[] = {"do", "try", "finally", "go", "alt!", "alt!!"};
+const char *do_indent[] = {"do",   "try",   "finally", "go",
+                           "alt!", "alt!!", "cond"};
 
 const int TRIE_CHILDREN_NUM = '~' - '!' + 1;
 

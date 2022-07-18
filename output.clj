@@ -339,6 +339,11 @@
   :else
   (println "ha"))
 
+(cond (test-a)
+      :a
+      (test-b)
+      :b)
+
 (cond1-> t
          (= 1 2) (assoc :t 1)
          true identity)
