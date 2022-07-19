@@ -389,6 +389,9 @@ static value *read_value(void) {
         case '"':
             ctx->sp++;
             return read_string(V_REGEX, ctx->sp - 1);
+        case '_':
+            ctx->sp += 2;
+            return make_value(V_SYMBOL, ctx->sp - 2, ctx->sp);
         }
         // fallthrough
     default:
