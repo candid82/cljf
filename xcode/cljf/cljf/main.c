@@ -93,10 +93,10 @@ typedef enum {
     V_MAP,
     V_SET,
     V_FN,
-    V_UKNOWN
+    V_MAX
 } value_type;
 
-char *value_type_names[V_UKNOWN] = {
+char *value_type_names[V_MAX] = {
     "char", "string",  "regex", "number", "symbol", "keyword", "nil",
     "bool", "comment", "list",  "vector", "map",    "set",     "fn"};
 
@@ -462,6 +462,37 @@ static inline bool is_prefix(value *val) {
     }
 }
 
+static bool require_less(value *v1, value *v2) {
+    if (v1->type > V_COMMENT && ((collection *)v1)->count) {
+        v1 = ((collection *)v1)->vals[0];
+    }
+    if (v2->type > V_COMMENT && ((collection *)v2)->count) {
+        v2 = ((collection *)v2)->vals[0];
+    }
+    size_t len1 = length(v1);
+    size_t len2 = length(v2);
+    int r = memcmp(v1->start, v2->start, len1 < len2 ? len1 : len2);
+    if (!r) {
+        return len1 < len2;
+    }
+    return r < 0;
+}
+
+static void sort_require(collection *coll) {
+    for (int i = 1; i < coll->count; i++) {
+        coll->vals[i]->new_lines = 1;
+    }
+    for (int i = 1; i < coll->count - 1; i++) {
+        for (int j = i + 1; j < coll->count; j++) {
+            if (require_less(coll->vals[j], coll->vals[i])) {
+                value *t = coll->vals[i];
+                coll->vals[i] = coll->vals[j];
+                coll->vals[j] = t;
+            }
+        }
+    }
+}
+
 static void format_collection(collection *coll, char start, char end, FILE *f) {
     int old_indent = ctx->indent;
     if (coll->val.type == V_FN || coll->val.type == V_SET) {
@@ -502,6 +533,7 @@ static void format_collection(collection *coll, char start, char end, FILE *f) {
             break;
         case V_KEYWORD:
             if (is_require_indent(v)) {
+                sort_require(coll);
                 ctx->indent += (v->end - v->start + 1);
                 v->new_lines = 0;
             }

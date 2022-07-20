@@ -128,7 +128,8 @@
             my.test1
             [my.test2]
             [my.test3 :as test3 :refer [f1]])
-  (:import (java.time LocalDateTime ZonedDateTime ZoneId)
+  (:import abc.dfg
+           (java.time LocalDateTime ZonedDateTime ZoneId)
            java.time.format.DateTimeFormatter))
 
 (defn test-docstring

@@ -132,7 +132,8 @@ plus
             [my.test2]
             [my.test3 :as test3 :refer [f1]])
   (:import (java.time LocalDateTime ZonedDateTime ZoneId)
-           java.time.format.DateTimeFormatter))
+           java.time.format.DateTimeFormatter
+           abc.dfg))
 
 (defn test-docstring
   "Given a multimethod and a dispatch value, returns the dispatch fn
