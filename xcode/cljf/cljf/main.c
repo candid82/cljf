@@ -609,6 +609,24 @@ static void format_value(value *val, FILE *f) {
     }
 }
 
+#define CHUNK_SIZE 4096
+
+static void read_stdin(context *ctx) {
+    ctx->size = CHUNK_SIZE;
+    ctx->bytes = malloc(ctx->size + 1);
+    char *p = ctx->bytes;
+    size_t cnt;
+    while ((cnt = fread(p, 1, CHUNK_SIZE, stdin)) == CHUNK_SIZE) {
+        ctx->size += CHUNK_SIZE;
+        ctx->bytes = realloc(ctx->bytes, ctx->size + 1);
+        p = ctx->bytes + ctx->size - CHUNK_SIZE;
+    }
+    ctx->size += cnt;
+    ctx->bytes[ctx->size] = '\0';
+    ctx->sp = ctx->bytes;
+    ctx->filename = "stdin";
+}
+
 static void read_file(const char *filename, context *ctx) {
     FILE *f = fopen(filename, "rb");
     if (!f) {
@@ -631,13 +649,15 @@ static void read_file(const char *filename, context *ctx) {
 }
 
 static void parse_args(int argc, char **argv, options *opts) {
-    if (argc == 2) {
+    if (argc == 1) {
+        opts->input = NULL;
+        opts->output = NULL;
+        return;
+    } else if (argc == 2) {
         opts->input = argv[1];
         opts->output = argv[1];
         return;
-    }
-
-    if (argc == 4) {
+    } else if (argc == 4) {
         if (!strcmp(argv[1], "-o")) {
             opts->input = argv[3];
             opts->output = argv[2];
@@ -665,7 +685,12 @@ bool is_clj(const char *filename) {
 
 void format_file(const char *input, const char *output) {
     ctx = make_context();
-    read_file(input, ctx);
+
+    if (input) {
+        read_file(input, ctx);
+    } else {
+        read_stdin(ctx);
+    }
 
     collection *forms = make_collection(V_VECTOR, NULL);
 
@@ -734,7 +759,7 @@ int main(int argc, char **argv) {
     pump_tries();
 
     DIR *d;
-    if ((d = opendir(opts.input))) {
+    if (opts.input && (d = opendir(opts.input))) {
         closedir(d);
         format_dir(opts.input);
     } else {
