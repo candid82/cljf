@@ -480,6 +480,17 @@ static bool require_less(value *v1, value *v2) {
 
 static void sort_require(collection *coll) {
     for (int i = 1; i < coll->count; i++) {
+        switch (coll->vals[i]->type) {
+        case V_VECTOR:
+        case V_LIST:
+            break;
+        case V_SYMBOL:
+            if (is_prefix(coll->vals[i]))
+                return;
+            break;
+        default:
+            return;
+        }
         coll->vals[i]->new_lines = 1;
     }
     for (int i = 1; i < coll->count - 1; i++) {
