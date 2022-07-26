@@ -1,3 +1,5 @@
+### cljf
+
 cljf is a simple formatter for Clojure source code. It is similar to Joker's [format mode](https://github.com/candid82/joker#format-mode), but much smaller and faster as it only does one thing: formats code.
 
 ### Building
@@ -13,6 +15,8 @@ or
 ```
 
 Tested on macOS. Should work on Linux.
+
+### Usage
 
 ```
 Usage: cljf [<input file or directory>] [-o <output file>]
