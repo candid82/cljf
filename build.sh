@@ -1,3 +1,3 @@
 #!/bin/bash
 
-gcc xcode/cljf/cljf/main.c -o cljf -O3
+gcc main.c -o cljf -O3
