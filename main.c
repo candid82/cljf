@@ -181,7 +181,19 @@ static void add_to_coll(collection *coll, value *v) {
 }
 
 static void print_usage(void) {
-    fprintf(stderr, "Usage: cljf <filename> [-o <filename>]\n");
+    fprintf(stderr,
+            "Usage: cljf [<input file or directory>] [-o <output file>]\n"
+            "Examples:\n"
+            "cljf                    - read source code from stdin and write "
+            "formatted "
+            "code to stdout\n"
+            "cljf foo.clj            - format file foo.clj (override its "
+            "content with formatted code)\n"
+            "cljf foo.clj -o bar.clj - read source code from file "
+            "foo.clj and write formatted code to file bar.clj\n"
+            "cljf src                - format all Clojure files (files with "
+            "extensions "
+            "*.clj, *.cljs, *.cljc, *.joke) in src directory\n");
     exit(1);
 }
 
