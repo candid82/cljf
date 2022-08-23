@@ -703,6 +703,8 @@ bool is_clj(const char *filename) {
     return (!strcmp(filename + (len - 4), ".clj") ||
             !strcmp(filename + (len - 5), ".cljs") ||
             !strcmp(filename + (len - 5), ".cljc") ||
+            !strcmp(filename + (len - 4), ".edn") ||
+            !strcmp(filename + (len - 5), ".cljd") ||
             !strcmp(filename + (len - 5), ".joke"));
 }
 
