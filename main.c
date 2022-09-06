@@ -559,6 +559,8 @@ static void format_collection(collection *coll, char start, char end, FILE *f) {
                 sort_require(coll);
                 ctx->indent += (v->end - v->start + 1);
                 v->new_lines = 0;
+            } else if (!v->new_lines) {
+                ctx->indent += (v->end - v->start + 1);
             }
             break;
         default:
