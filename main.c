@@ -559,7 +559,9 @@ static void format_collection(collection *coll, char start, char end, FILE *f) {
                 sort_require(coll);
                 ctx->indent += (v->end - v->start + 1);
                 v->new_lines = 0;
-            } else if (!v->new_lines) {
+            } else if (!v->new_lines && coll->count == 3) {
+                // Looks like a (:keyword map default) form,
+                // format as a function call.
                 ctx->indent += (v->end - v->start + 1);
             }
             break;
