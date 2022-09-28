@@ -550,7 +550,7 @@ static void format_collection(collection *coll, char start, char end, FILE *f) {
                      !memcmp(v->name_start, "extend-protocol", 15))) {
                     is_defrecord = true;
                 }
-            } else if (!v->new_lines) {
+            } else if (!v->new_lines && v->start[0] != '^') {
                 ctx->indent += (v->end - v->start + 1);
             }
             break;

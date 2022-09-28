@@ -451,3 +451,12 @@
 (fn [s] (str \\ \{ \\ \{ s \\ \} \\ \}))
 
 #_#{"10134120381979624"}
+
+(defn get-boolean-value
+  (^Boolean [component key]
+   (get-boolean-value component key false))
+  (^Boolean [component key default]
+   (if-let [value (get-value component key nil)]
+     (#?@(:clj [Boolean/valueOf]
+          :cljs [= "true"]) value)
+     default)))
