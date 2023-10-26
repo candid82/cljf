@@ -464,7 +464,8 @@ static inline bool is_prefix(value *val) {
     case 2:
         return (val->start[0] == '#' &&
                 (val->start[1] == '?' || val->start[1] == '_')) ||
-               (val->start[0] == '~' && val->start[1] == '@');
+               (val->start[0] == '~' && val->start[1] == '@') ||
+               (val->start[0] == '\'' && val->start[1] == '#');
     case 3:
         return val->start[0] == '#' &&
                ((val->start[1] == '?' && val->start[2] == '@') ||

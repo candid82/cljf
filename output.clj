@@ -460,3 +460,5 @@
      (#?@(:clj [Boolean/valueOf]
           :cljs [= "true"]) value)
      default)))
+
+'#{a b}
