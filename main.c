@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define SINGLE_BLANK_LINE_BETWEEN_FORMS
+
 #define ASIZE(a) (sizeof(a) / sizeof(a[0]))
 #define MAX_PATH_SIZE 2048
 
@@ -741,7 +743,13 @@ void format_file(const char *input, const char *output) {
     for (int i = 0; i < forms->count; i++) {
         value *val = forms->vals[i];
         format_value(val, out);
-        for (int j = 0; j < val->new_lines; j++) {
+        int new_lines = val->new_lines;
+#ifdef SINGLE_BLANK_LINE_BETWEEN_FORMS
+        if (new_lines > 2) {
+            new_lines = 2;
+        }
+#endif
+        for (int j = 0; j < new_lines; j++) {
             fputc('\n', out);
             ctx->offset = 0;
         }
